@@ -48,6 +48,11 @@ osint case status example-case --json
 osint case report example-case
 ```
 
+The default `report.md` can be regenerated in place. A custom `--output` must
+remain inside the case directory and will not replace an existing file unless
+`--force` is supplied. Reserved metadata, activity, and raw-run paths can never
+be used as report destinations.
+
 ## Resume behavior
 
 Each target/plugin pair has a stable job identifier. A normal case run:
