@@ -19,7 +19,7 @@ import tempfile
 import time
 from typing import Any, Iterable
 
-__version__ = "0.2.0-dev"
+__version__ = "0.2.0"
 
 SYSTEM_ROOT = Path("/usr/local/share/osint-forge")
 STATE_ROOT = Path.home() / ".local/state/osint-forge"
