@@ -83,6 +83,34 @@ consistently in `~/.local/state/osint-forge/`.
 Unknown names passed to `--plugins` are rejected instead of being silently
 ignored.
 
+## Case management
+
+Create a private, resumable investigation workspace and document why the work
+is authorized:
+
+```bash
+osint case create example-case \
+  --purpose "Investigate authorized brand impersonation" \
+  --authorization "Written authorization from Example Organization"
+
+osint case add example-case username example_handle
+osint case add example-case email analyst@example.com
+osint case run example-case --plugins maigret sherlock
+osint case status example-case
+osint case report example-case
+```
+
+Case data defaults to `~/OSINT-Cases/<case-id>/`. Metadata, targets, raw tool
+output, commands, timestamps, plugin versions, exit statuses, and an
+append-only activity log are stored with owner-only permissions. Re-running
+`osint case run` skips successful jobs and retries failed or missing jobs.
+Use `--rerun` to execute successful jobs again.
+
+The generated Markdown report is an execution summary linked to preserved raw
+output; it does not promote unverified tool output to a finding. See
+[`docs/CASE-MANAGEMENT.md`](docs/CASE-MANAGEMENT.md) for the directory schema,
+resume behavior, and safety model.
+
 ## Modular plugin system
 
 Every tool is a self-contained plugin:

@@ -7,6 +7,23 @@ stable release, minor versions may include breaking changes.
 
 ## Unreleased
 
+### Added
+
+- Versioned case workspaces with documented purpose and authorization scope
+- `osint case create`, `add`, `run`, `status`, and `report` commands
+- Resumable execution that skips successful jobs and retries failed or missing
+  jobs
+- Append-only case activity logs and provenance-linked Markdown summaries
+- Migration handling for legacy case metadata and rejection of unknown future
+  schemas
+
+### Security
+
+- Case metadata, targets, activity logs, reports, raw output, notes, findings,
+  and run directories use owner-only permissions
+- Case IDs, symbolic-link paths, and report destinations are validated to
+  prevent directory traversal or case-data escape
+
 ## 0.2.0 - 2026-07-28
 
 ### Added
