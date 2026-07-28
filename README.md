@@ -103,6 +103,11 @@ sudo ./scripts/uninstall-framework.sh
 This removes the OSINT Forge launcher and framework files. Installed
 third-party tools and case data are left intact.
 
+## Security
+
+Do not report vulnerabilities publicly. Follow the project's
+[Security Policy](.github/SECURITY.md) for scope and private-reporting guidance.
+
 ## License
 
 OSINT Forge is licensed under the
