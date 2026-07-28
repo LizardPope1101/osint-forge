@@ -1,6 +1,7 @@
 # OSINT Forge
 
 [![CI](https://github.com/LizardPope1101/osint-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/LizardPope1101/osint-forge/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/LizardPope1101/osint-forge)](https://github.com/LizardPope1101/osint-forge/releases/latest)
 
 OSINT Forge is a modular tool manager and workflow layer for a minimal
 Debian-based OSINT workstation.
@@ -8,10 +9,19 @@ Debian-based OSINT workstation.
 Use it only for lawful research. Network scanning must be limited to systems
 you own or are explicitly authorized to assess.
 
+## Requirements
+
+OSINT Forge supports Debian stable and Ubuntu 24.04 with Python 3.10 through
+3.13. Use the latest stable release for investigations. The `main` branch is
+the active development branch and may contain changes intended for the next
+release.
+
 ## Fresh Debian/Ubuntu installation
 
+Clone the latest stable tag:
+
 ```bash
-git clone https://github.com/LizardPope1101/osint-forge.git
+git clone --branch v0.3.0 https://github.com/LizardPope1101/osint-forge.git
 cd osint-forge
 chmod +x bootstrap.sh
 ./bootstrap.sh
@@ -137,6 +147,21 @@ osint forge validate --json
 
 Copy `docs/plugin-template` to start a new plugin. See
 [`docs/PLUGIN-API.md`](docs/PLUGIN-API.md) for the full contract.
+
+## Roadmap
+
+Development is tracked in public release issues:
+
+- [v0.4: normalized reporting](https://github.com/LizardPope1101/osint-forge/issues/6)
+- [v0.5: governed plugin expansion](https://github.com/LizardPope1101/osint-forge/issues/13)
+- [v0.6: reusable investigation workflows](https://github.com/LizardPope1101/osint-forge/issues/18)
+- [v0.7: evidence integrity and portable exports](https://github.com/LizardPope1101/osint-forge/issues/14)
+- [v0.8: analyst review, correlation, and finding lifecycle](https://github.com/LizardPope1101/osint-forge/issues/15)
+- [v0.9: platform hardening and v1 contract freeze](https://github.com/LizardPope1101/osint-forge/issues/17)
+- [v1.0: first stable release](https://github.com/LizardPope1101/osint-forge/issues/16)
+
+Until v1.0, minor releases may include breaking changes. Review the
+[changelog](CHANGELOG.md) before upgrading.
 
 ## Uninstall the framework
 
