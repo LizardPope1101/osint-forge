@@ -1,5 +1,7 @@
 # OSINT Forge
 
+[![CI](https://github.com/LizardPope1101/osint-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/LizardPope1101/osint-forge/actions/workflows/ci.yml)
+
 OSINT Forge is a modular tool manager and workflow layer for a minimal
 Debian-based OSINT workstation.
 
@@ -23,6 +25,8 @@ framework. Individual OSINT tools remain opt-in.
 osint forge list
 osint forge categories
 osint forge doctor
+osint forge validate
+osint forge version
 ```
 
 ## Install and maintain tools
@@ -90,6 +94,13 @@ plugins/<tool>/
 The manifest declares categories, commands, supported target types, lifecycle
 scripts, root requirements, and target adapters. Adapter commands are argument
 arrays rather than interpolated shell strings.
+
+Validate the complete plugin contract without executing a plugin:
+
+```bash
+osint forge validate
+osint forge validate --json
+```
 
 Copy `docs/plugin-template` to start a new plugin. See
 [`docs/PLUGIN-API.md`](docs/PLUGIN-API.md) for the full contract.

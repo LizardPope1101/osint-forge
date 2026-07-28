@@ -19,6 +19,8 @@ import tempfile
 import time
 from typing import Any, Iterable
 
+__version__ = "0.2.0-dev"
+
 SYSTEM_ROOT = Path("/usr/local/share/osint-forge")
 STATE_ROOT = Path.home() / ".local/state/osint-forge"
 CONFIG_ROOT = Path("/etc/osint-forge")
@@ -28,6 +30,8 @@ EMAIL_RE = re.compile(r"^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,63}$", re.I)
 DOMAIN_RE = re.compile(r"^(?=.{1,253}$)(?:[A-Z0-9](?:[A-Z0-9\-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,63}$", re.I)
 IP_RE = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
 USERNAME_RE = re.compile(r"^[^\s/@]{1,128}$")
+TARGET_TYPES = {"email", "username", "domain", "ip", "image", "file"}
+ADAPTER_PLACEHOLDERS = {"{target}", "{output_dir}", "{plugin_dir}"}
 
 
 def forge_root() -> Path:
@@ -80,6 +84,116 @@ def catalog() -> dict[str, tuple[Path, dict[str, Any]]]:
         manifest = load_manifest(directory)
         result[manifest["id"]] = (directory, manifest)
     return result
+
+
+def validate_plugin_directory(plugin_dir: Path) -> tuple[list[str], list[str]]:
+    """Return manifest errors and warnings without executing plugin code."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    path = plugin_dir / "manifest.json"
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return ([f"{plugin_dir.name}: missing manifest.json"], warnings)
+    except json.JSONDecodeError as exc:
+        return ([f"{plugin_dir.name}: invalid JSON: {exc}"], warnings)
+
+    required = {
+        "schema", "plugin_version", "id", "name", "description", "category",
+        "homepage", "upstream_license", "upstream_license_url", "commands",
+        "supports", "batch", "lifecycle", "requires_root", "adapters",
+    }
+    missing = sorted(required - set(manifest))
+    if missing:
+        errors.append(f"{plugin_dir.name}: missing fields: {', '.join(missing)}")
+
+    plugin_id = manifest.get("id")
+    if plugin_id != plugin_dir.name:
+        errors.append(
+            f"{plugin_dir.name}: manifest id {plugin_id!r} must match directory name"
+        )
+    if manifest.get("schema") != 1:
+        errors.append(f"{plugin_dir.name}: unsupported schema {manifest.get('schema')!r}")
+
+    for field in ("name", "description", "category", "homepage",
+                  "upstream_license", "upstream_license_url"):
+        if field in manifest and not isinstance(manifest[field], str):
+            errors.append(f"{plugin_dir.name}: {field} must be a string")
+
+    commands = manifest.get("commands")
+    if not isinstance(commands, list) or not commands or not all(
+        isinstance(item, str) and item for item in commands
+    ):
+        errors.append(f"{plugin_dir.name}: commands must be a non-empty string array")
+
+    supports = manifest.get("supports")
+    if not isinstance(supports, list) or not all(isinstance(item, str) for item in supports):
+        errors.append(f"{plugin_dir.name}: supports must be a string array")
+        supports = []
+    unknown_targets = sorted(set(supports) - TARGET_TYPES)
+    if unknown_targets:
+        errors.append(
+            f"{plugin_dir.name}: unsupported target types: {', '.join(unknown_targets)}"
+        )
+
+    if not isinstance(manifest.get("batch"), bool):
+        errors.append(f"{plugin_dir.name}: batch must be true or false")
+
+    lifecycle = manifest.get("lifecycle")
+    root_map = manifest.get("requires_root")
+    if not isinstance(lifecycle, dict):
+        errors.append(f"{plugin_dir.name}: lifecycle must be an object")
+        lifecycle = {}
+    if not isinstance(root_map, dict):
+        errors.append(f"{plugin_dir.name}: requires_root must be an object")
+        root_map = {}
+    for action in ("install", "update", "remove", "doctor"):
+        rel = lifecycle.get(action)
+        if not isinstance(rel, str) or not rel:
+            errors.append(f"{plugin_dir.name}: lifecycle.{action} must name a script")
+        else:
+            script = plugin_dir / rel
+            if not script.is_file():
+                errors.append(f"{plugin_dir.name}: missing lifecycle script {rel}")
+            elif not os.access(script, os.X_OK):
+                errors.append(f"{plugin_dir.name}: lifecycle script is not executable: {rel}")
+        if action not in root_map or not isinstance(root_map.get(action), bool):
+            errors.append(f"{plugin_dir.name}: requires_root.{action} must be boolean")
+
+    adapters = manifest.get("adapters")
+    if not isinstance(adapters, dict):
+        errors.append(f"{plugin_dir.name}: adapters must be an object")
+        adapters = {}
+    for target_type, adapter in adapters.items():
+        if target_type not in TARGET_TYPES:
+            errors.append(f"{plugin_dir.name}: adapter has unknown target type {target_type}")
+        if target_type not in supports:
+            errors.append(f"{plugin_dir.name}: adapter {target_type} is not listed in supports")
+        command = adapter.get("command") if isinstance(adapter, dict) else None
+        if not isinstance(command, list) or not command or not all(
+            isinstance(token, str) and token for token in command
+        ):
+            errors.append(
+                f"{plugin_dir.name}: adapter {target_type} command must be a non-empty string array"
+            )
+            continue
+        placeholders = {
+            match
+            for token in command
+            for match in re.findall(r"\{[^{}]+\}", token)
+        }
+        unsupported = sorted(placeholders - ADAPTER_PLACEHOLDERS)
+        if unsupported:
+            errors.append(
+                f"{plugin_dir.name}: adapter {target_type} uses unsupported placeholders: "
+                + ", ".join(unsupported)
+            )
+        if "{target}" not in " ".join(command):
+            warnings.append(f"{plugin_dir.name}: adapter {target_type} does not use {{target}}")
+
+    if manifest.get("batch") and not adapters:
+        errors.append(f"{plugin_dir.name}: batch plugin must define at least one adapter")
+    return errors, warnings
 
 
 def record_path(plugin_id: str) -> Path:
@@ -486,8 +600,50 @@ def cmd_categories(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_validate(args: argparse.Namespace) -> int:
+    directories = [
+        directory
+        for directory in sorted(plugin_root().iterdir())
+        if directory.is_dir()
+    ] if plugin_root().exists() else []
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not directories:
+        errors.append("no plugin directories found")
+    for directory in directories:
+        plugin_errors, plugin_warnings = validate_plugin_directory(directory)
+        errors.extend(plugin_errors)
+        warnings.extend(plugin_warnings)
+
+    payload = {
+        "plugin_count": len(directories),
+        "errors": errors,
+        "warnings": warnings,
+        "valid": not errors,
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2))
+    else:
+        for warning in warnings:
+            print(f"WARN     {warning}")
+        for error in errors:
+            print(f"ERROR    {error}", file=sys.stderr)
+        status = "valid" if not errors else "invalid"
+        print(
+            f"Validated {len(directories)} plugin(s): "
+            f"{len(errors)} error(s), {len(warnings)} warning(s) — {status}"
+        )
+    return 1 if errors else 0
+
+
+def cmd_version(args: argparse.Namespace) -> int:
+    print(f"OSINT Forge {__version__}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="osint", description="OSINT Forge modular tool manager")
+    parser.add_argument("--version", action="version", version=f"OSINT Forge {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     forge = sub.add_parser("forge", help="manage OSINT Forge tools")
@@ -522,6 +678,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = fs.add_parser("categories")
     p.set_defaults(func=cmd_categories)
+
+    p = fs.add_parser("validate", help="validate every plugin manifest and lifecycle contract")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_validate)
+
+    p = fs.add_parser("version", help="show the framework version")
+    p.set_defaults(func=cmd_version)
 
     p = sub.add_parser("run", help="run one plugin adapter")
     p.add_argument("plugin")

@@ -22,6 +22,19 @@ material that you do not have the right to distribute.
 - Include or update documentation when behavior changes.
 - Test lifecycle operations with `--dry-run` before exercising them on a host.
 
+## Validation
+
+Before opening a pull request, run:
+
+```bash
+python3 -m unittest discover -s tests -v
+./bin/osint forge validate
+bash -n bootstrap.sh bin/osint scripts/*.sh plugins/*/*.sh docs/plugin-template/*.sh
+```
+
+GitHub Actions repeats these checks and also runs ShellCheck and a Debian
+container smoke test.
+
 ## Adding a plugin
 
 Copy `docs/plugin-template`, then follow `docs/PLUGIN-API.md`. A plugin should
@@ -31,4 +44,3 @@ root requirements, and adapter commands.
 The upstream tool remains an independent work under its own license. Do not
 copy upstream source code into OSINT Forge unless its license is compatible and
 the required notices are included.
-
