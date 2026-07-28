@@ -28,18 +28,36 @@ fi
 
 install -d -m 0755 "$(dirname -- "$INSTALL_ROOT")" "$BIN_DIR" "$ETC_ROOT"
 staging="$(mktemp -d "${INSTALL_ROOT}.new.XXXXXX")"
-backup="${INSTALL_ROOT}.old.$$"
+backup="$(mktemp -d "${INSTALL_ROOT}.old.XXXXXX")"
+rmdir -- "$backup"
 cleanup() {
     rm -rf -- "$staging"
 }
 trap cleanup EXIT
 
 cp -a "$ROOT/forge" "$ROOT/plugins" "$ROOT/scripts" "$staging/"
+find "$staging" -type d -name __pycache__ -prune -exec rm -rf -- {} +
+find "$staging" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 find "$staging" -type d -exec chmod 0755 {} +
 find "$staging" -type f -name '*.sh' -exec chmod 0755 {} +
 chmod 0755 "$staging/forge/osint_forge.py"
+launcher_sha256="$(sha256sum "$ROOT/bin/osint" | cut -d' ' -f1)"
+printf 'schema=1\nlauncher_sha256=%s\n' "$launcher_sha256" \
+    > "$staging/.osint-forge-install"
+chmod 0644 "$staging/.osint-forge-install"
 
 if [[ -e "$INSTALL_ROOT" || -L "$INSTALL_ROOT" ]]; then
+    if [[ -L "$INSTALL_ROOT" || ! -d "$INSTALL_ROOT" ]]; then
+        echo "Refusing to replace unsafe installation target: $INSTALL_ROOT" >&2
+        exit 1
+    fi
+    if [[ ! -f "$INSTALL_ROOT/.osint-forge-install" ]] \
+        && [[ ! -f "$INSTALL_ROOT/forge/osint_forge.py" \
+              || ! -d "$INSTALL_ROOT/plugins" \
+              || ! -d "$INSTALL_ROOT/scripts" ]]; then
+        echo "Refusing to replace unrecognized directory: $INSTALL_ROOT" >&2
+        exit 1
+    fi
     mv -- "$INSTALL_ROOT" "$backup"
 fi
 if ! mv -- "$staging" "$INSTALL_ROOT"; then

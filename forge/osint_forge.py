@@ -34,6 +34,7 @@ IP_RE = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
 USERNAME_RE = re.compile(r"^[^\s/@]{1,128}$")
 TARGET_TYPES = {"email", "username", "domain", "ip", "image", "file"}
 ADAPTER_PLACEHOLDERS = {"{target}", "{output_dir}", "{plugin_dir}"}
+NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 
 
 def forge_root() -> Path:
@@ -101,19 +102,25 @@ def write_private_text(path: Path, content: str) -> None:
 def secure_case_directory(path: Path, root: Path) -> None:
     if path != root and root not in path.parents:
         raise RuntimeError(f"Refusing case directory outside {root}: {path}")
-    path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    current = path
-    while True:
+    relative_parts = path.relative_to(root).parts
+    current = root
+    for part in ("", *relative_parts):
+        if part:
+            current = current / part
+        if current.is_symlink():
+            raise RuntimeError(f"Refusing symbolic-link case directory: {current}")
+        try:
+            current.mkdir(mode=0o700)
+        except FileExistsError:
+            if not current.is_dir():
+                raise RuntimeError(f"Case path is not a directory: {current}")
         current.chmod(0o700)
-        if current == root:
-            break
-        current = current.parent
 
 
 def open_private_log(path: Path):
     descriptor = os.open(
         path,
-        os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC | NOFOLLOW,
         0o600,
     )
     os.fchmod(descriptor, 0o600)
@@ -156,7 +163,7 @@ def append_case_activity(path: Path, event: str, **details: Any) -> None:
     log_path = path / "activity.jsonl"
     descriptor = os.open(
         log_path,
-        os.O_WRONLY | os.O_CREAT | os.O_APPEND,
+        os.O_WRONLY | os.O_CREAT | os.O_APPEND | NOFOLLOW,
         0o600,
     )
     os.fchmod(descriptor, 0o600)
@@ -205,8 +212,34 @@ def load_case(case_id: str) -> tuple[Path, dict[str, Any]]:
         raise SystemExit(f"{case_id}: case metadata missing: {', '.join(missing)}")
     if metadata["id"] != case_id:
         raise SystemExit(f"{case_id}: case ID does not match its directory")
+    text_fields = ("purpose", "authorization_scope", "created_at", "updated_at")
+    if any(
+        not isinstance(metadata[field], str) or not metadata[field].strip()
+        for field in text_fields
+    ):
+        raise SystemExit(f"{case_id}: invalid case metadata text field")
     if not isinstance(metadata["targets"], list) or not isinstance(metadata["jobs"], dict):
         raise SystemExit(f"{case_id}: invalid targets or jobs collection")
+    for target in metadata["targets"]:
+        if (
+            not isinstance(target, dict)
+            or not isinstance(target.get("id"), str)
+            or target.get("type") not in TARGET_TYPES
+            or not isinstance(target.get("value"), str)
+            or not isinstance(target.get("added_at"), str)
+        ):
+            raise SystemExit(f"{case_id}: invalid target record")
+        if target["id"] != target_id(target["type"], target["value"]):
+            raise SystemExit(f"{case_id}: target ID does not match its value")
+    for job_id, state in metadata["jobs"].items():
+        if (
+            not isinstance(job_id, str)
+            or not isinstance(state, dict)
+            or not isinstance(state.get("status"), str)
+        ):
+            raise SystemExit(f"{case_id}: invalid job record")
+        if "exit_code" in state and not isinstance(state["exit_code"], int):
+            raise SystemExit(f"{case_id}: invalid job exit code")
     path.chmod(0o700)
     metadata_path.chmod(0o600)
     return path, metadata
@@ -457,9 +490,6 @@ def command_exists(command: str) -> bool:
 
 
 def is_installed(plugin_id: str) -> bool:
-    rec = installed_record(plugin_id)
-    if rec is not None:
-        return True
     entry = catalog().get(plugin_id)
     if not entry:
         return False
@@ -721,7 +751,11 @@ def run_adapter(plugin_id: str, target_type: str, value: str, output_dir: Path, 
     if not is_installed(plugin_id) and not dry_run:
         print(f"MISS     {plugin_id}: not installed", file=sys.stderr)
         return 127
+    if output_dir.is_symlink():
+        raise RuntimeError(f"Refusing symbolic-link output directory: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if output_dir.is_symlink() or not output_dir.is_dir():
+        raise RuntimeError(f"Output path is not a safe directory: {output_dir}")
     output_dir.chmod(0o700)
     cmd = adapter_command(plugin_dir, manifest, target_type, value, output_dir)
     if dry_run:
@@ -779,7 +813,15 @@ def parse_batch_file(path: Path) -> list[tuple[str, str]]:
     current = None
     result = []
     seen = set()
-    for lineno, raw in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
+    try:
+        content = path.read_text(encoding="utf-8-sig")
+    except FileNotFoundError as exc:
+        raise SystemExit(f"Batch input does not exist: {path}") from exc
+    except UnicodeError as exc:
+        raise SystemExit(f"Batch input is not valid UTF-8: {path}") from exc
+    except OSError as exc:
+        raise SystemExit(f"Could not read batch input {path}: {exc}") from exc
+    for lineno, raw in enumerate(content.splitlines(), 1):
         line = raw.strip()
         if not line or line.startswith(("#", ";")):
             continue
@@ -835,11 +877,6 @@ def cmd_batch(args: argparse.Namespace) -> int:
     unknown_plugins = sorted(set(args.plugins) - set(cat))
     if unknown_plugins:
         raise SystemExit(f"Unknown batch plugin(s): {', '.join(unknown_plugins)}")
-    run_dir = create_run_directory(args.output_root.expanduser().resolve(), args.name)
-    copied_input = run_dir / "targets-input.txt"
-    shutil.copy2(source, copied_input)
-    copied_input.chmod(0o600)
-
     jobs = []
     for target_type, value in targets:
         for pid, (_, manifest) in cat.items():
@@ -849,30 +886,39 @@ def cmd_batch(args: argparse.Namespace) -> int:
                 continue
             if not is_installed(pid):
                 continue
-            out = run_dir / f"{target_type}s" / safe_slug(value) / pid
-            jobs.append((pid, target_type, value, out))
-
-    print(f"Run directory: {run_dir}")
-    print(f"Targets: {len(targets)} | Jobs: {len(jobs)} | Concurrency: {args.jobs}")
+            jobs.append((pid, target_type, value))
     if not jobs:
         print("No installed batch-capable plugins matched these target sections.", file=sys.stderr)
         return 1
+    run_dir = create_run_directory(args.output_root.expanduser().resolve(), args.name)
+    copied_input = run_dir / "targets-input.txt"
+    shutil.copy2(source, copied_input)
+    copied_input.chmod(0o600)
+    scheduled = [
+        (pid, target_type, value, run_dir / f"{target_type}s" / safe_slug(value) / pid)
+        for pid, target_type, value in jobs
+    ]
+
+    print(f"Run directory: {run_dir}")
+    print(f"Targets: {len(targets)} | Jobs: {len(scheduled)} | Concurrency: {args.jobs}")
 
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = [
-            pool.submit(run_adapter, pid, typ, value, out, args.dry_run)
-            for pid, typ, value, out in jobs
-        ]
-        for job, future in zip(jobs, futures):
-            results.append((*job[:3], future.result()))
+        future_jobs = {
+            pool.submit(run_adapter, pid, typ, value, out, args.dry_run):
+                (pid, typ, value)
+            for pid, typ, value, out in scheduled
+        }
+        for future in concurrent.futures.as_completed(future_jobs):
+            results.append((*future_jobs[future], future.result()))
+    results.sort(key=lambda item: item[:3])
 
     summary = {
         "created_at": now(),
         "input": str(source),
         "run_directory": str(run_dir),
         "target_count": len(targets),
-        "job_count": len(jobs),
+        "job_count": len(scheduled),
         "results": [
             {"plugin": p, "type": t, "target": v, "exit_code": rc}
             for p, t, v, rc in results
@@ -1249,14 +1295,25 @@ def cmd_case_report(args: argparse.Namespace) -> int:
         raise SystemExit(
             f"Report output already exists: {output}; use --force to replace it."
         )
+
+    def markdown(value: Any) -> str:
+        return (
+            str(value)
+            .replace("\\", "\\\\")
+            .replace("|", "\\|")
+            .replace("`", "&#96;")
+            .replace("\r", " ")
+            .replace("\n", " ")
+        )
+
     lines = [
-        f"# OSINT Forge Case: {metadata['id']}",
+        f"# OSINT Forge Case: {markdown(metadata['id'])}",
         "",
         f"- **Schema:** {metadata['schema']}",
-        f"- **Purpose:** {metadata['purpose']}",
-        f"- **Authorization scope:** {metadata['authorization_scope']}",
-        f"- **Created:** {metadata['created_at']}",
-        f"- **Updated:** {metadata['updated_at']}",
+        f"- **Purpose:** {markdown(metadata['purpose'])}",
+        f"- **Authorization scope:** {markdown(metadata['authorization_scope'])}",
+        f"- **Created:** {markdown(metadata['created_at'])}",
+        f"- **Updated:** {markdown(metadata['updated_at'])}",
         "",
         "## Targets",
         "",
@@ -1264,9 +1321,9 @@ def cmd_case_report(args: argparse.Namespace) -> int:
         "|---|---|---|",
     ]
     for target in metadata["targets"]:
-        escaped = target["value"].replace("|", "\\|")
         lines.append(
-            f"| {target['type']} | `{escaped}` | {target['added_at']} |"
+            f"| {markdown(target['type'])} | `{markdown(target['value'])}` | "
+            f"{markdown(target['added_at'])} |"
         )
     lines.extend([
         "",
@@ -1289,8 +1346,10 @@ def cmd_case_report(args: argparse.Namespace) -> int:
             else ""
         )
         lines.append(
-            f"| {state.get('plugin', '')} | `{state.get('target_id', '')}` | "
-            f"{state.get('status', '')} | {state.get('exit_code', '')} | "
+            f"| {markdown(state.get('plugin', ''))} | "
+            f"`{markdown(state.get('target_id', ''))}` | "
+            f"{markdown(state.get('status', ''))} | "
+            f"{markdown(state.get('exit_code', ''))} | "
             f"[preserved output]({raw_link}) |"
         )
     lines.extend([
