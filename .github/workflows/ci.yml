@@ -14,7 +14,7 @@ jobs:
     name: Python and plugin contracts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
@@ -39,7 +39,7 @@ jobs:
     name: Shell quality
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check executable modes
         run: |
@@ -66,7 +66,7 @@ jobs:
       - name: Install test dependencies
         run: apt-get update && apt-get install -y git python3
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Exercise uninstalled framework
         env:
