@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "plugin_version": "1",
+  "id": "maigret",
+  "name": "Maigret",
+  "description": "Username search with structured reports.",
+  "category": "usernames",
+  "homepage": "https://github.com/soxoj/maigret",
+  "tags": [
+    "people",
+    "social",
+    "batch"
+  ],
+  "commands": [
+    "maigret"
+  ],
+  "supports": [
+    "username"
+  ],
+  "batch": true,
+  "lifecycle": {
+    "install": "install.sh",
+    "update": "update.sh",
+    "remove": "remove.sh",
+    "doctor": "doctor.sh"
+  },
+  "requires_root": {
+    "install": false,
+    "update": false,
+    "remove": false,
+    "doctor": false
+  },
+  "adapters": {
+    "username": {
+      "command": [
+        "maigret",
+        "{target}",
+        "--json",
+        "simple",
+        "--csv",
+        "--txt",
+        "--html",
+        "--no-progressbar"
+      ]
+    }
+  }
+}

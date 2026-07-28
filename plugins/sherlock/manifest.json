@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "plugin_version": "1",
+  "id": "sherlock",
+  "name": "Sherlock",
+  "description": "Search social networks for a username.",
+  "category": "usernames",
+  "homepage": "https://github.com/sherlock-project/sherlock",
+  "tags": [
+    "people",
+    "social",
+    "batch"
+  ],
+  "commands": [
+    "sherlock"
+  ],
+  "supports": [
+    "username"
+  ],
+  "batch": true,
+  "lifecycle": {
+    "install": "install.sh",
+    "update": "update.sh",
+    "remove": "remove.sh",
+    "doctor": "doctor.sh"
+  },
+  "requires_root": {
+    "install": false,
+    "update": false,
+    "remove": false,
+    "doctor": false
+  },
+  "adapters": {
+    "username": {
+      "command": [
+        "sherlock",
+        "{target}",
+        "--output",
+        "results.txt",
+        "--csv",
+        "--print-found",
+        "--no-color"
+      ]
+    }
+  }
+}

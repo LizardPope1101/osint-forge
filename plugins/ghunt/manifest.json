@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "plugin_version": "1",
+  "id": "ghunt",
+  "name": "GHunt",
+  "description": "Google-account-focused OSINT framework.",
+  "category": "email",
+  "homepage": "https://github.com/mxrch/GHunt",
+  "tags": [
+    "google",
+    "accounts",
+    "batch"
+  ],
+  "commands": [
+    "ghunt"
+  ],
+  "supports": [
+    "email"
+  ],
+  "batch": true,
+  "lifecycle": {
+    "install": "install.sh",
+    "update": "update.sh",
+    "remove": "remove.sh",
+    "doctor": "doctor.sh"
+  },
+  "requires_root": {
+    "install": false,
+    "update": false,
+    "remove": false,
+    "doctor": false
+  },
+  "adapters": {
+    "email": {
+      "command": [
+        "ghunt",
+        "email",
+        "{target}",
+        "--json",
+        "results.json"
+      ]
+    }
+  },
+  "notes": "Run 'ghunt login' interactively before using its email adapter."
+}

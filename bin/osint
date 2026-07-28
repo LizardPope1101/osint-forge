@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+ROOT="${OSINT_FORGE_ROOT:-/usr/local/share/osint-forge}"
+if [[ ! -f "$ROOT/forge/osint_forge.py" ]]; then
+    ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+exec python3 "$ROOT/forge/osint_forge.py" "$@"

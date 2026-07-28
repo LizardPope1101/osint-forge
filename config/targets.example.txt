@@ -1,0 +1,16 @@
+# OSINT Forge batch manifest
+
+[Emails]
+# analyst@example.com
+
+[Usernames]
+# example_handle
+
+[Domains]
+# example.com
+
+[IPs]
+# 192.0.2.10
+
+[Images]
+# ./photo.jpg

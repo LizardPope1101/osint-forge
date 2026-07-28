@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "plugin_version": "1",
+  "id": "spiderfoot",
+  "name": "SpiderFoot",
+  "description": "Automated OSINT collection and correlation framework.",
+  "category": "frameworks",
+  "homepage": "https://github.com/smicallef/spiderfoot",
+  "tags": [
+    "automation",
+    "correlation",
+    "web"
+  ],
+  "commands": [
+    "spiderfoot"
+  ],
+  "supports": [
+    "domain",
+    "ip",
+    "email",
+    "username"
+  ],
+  "batch": false,
+  "lifecycle": {
+    "install": "install.sh",
+    "update": "update.sh",
+    "remove": "remove.sh",
+    "doctor": "doctor.sh"
+  },
+  "requires_root": {
+    "install": true,
+    "update": true,
+    "remove": true,
+    "doctor": false
+  },
+  "adapters": {},
+  "notes": "Kept interactive by default because scans and module choices require deliberate configuration."
+}

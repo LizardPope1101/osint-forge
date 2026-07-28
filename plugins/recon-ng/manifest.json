@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "plugin_version": "1",
+  "id": "recon-ng",
+  "name": "Recon-ng",
+  "description": "Modular reconnaissance framework with workspaces and marketplace modules.",
+  "category": "infrastructure",
+  "homepage": "https://github.com/lanmaster53/recon-ng",
+  "tags": [
+    "framework",
+    "domains",
+    "workspace"
+  ],
+  "commands": [
+    "recon-ng"
+  ],
+  "supports": [
+    "domain"
+  ],
+  "batch": false,
+  "lifecycle": {
+    "install": "install.sh",
+    "update": "update.sh",
+    "remove": "remove.sh",
+    "doctor": "doctor.sh"
+  },
+  "requires_root": {
+    "install": true,
+    "update": true,
+    "remove": true,
+    "doctor": false
+  },
+  "adapters": {},
+  "notes": "Marketplace modules and API keys are managed inside Recon-ng."
+}

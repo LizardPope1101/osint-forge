@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "plugin_version": "1",
+  "id": "example",
+  "name": "Example Tool",
+  "description": "Replace with a useful description.",
+  "category": "misc",
+  "homepage": "https://example.org/",
+  "tags": [],
+  "commands": [
+    "example"
+  ],
+  "supports": [
+    "username"
+  ],
+  "batch": false,
+  "lifecycle": {
+    "install": "install.sh",
+    "update": "update.sh",
+    "remove": "remove.sh",
+    "doctor": "doctor.sh"
+  },
+  "requires_root": {
+    "install": false,
+    "update": false,
+    "remove": false,
+    "doctor": false
+  },
+  "adapters": {}
+}

@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "plugin_version": "1",
+  "id": "nmap",
+  "name": "Nmap",
+  "description": "Authorized network discovery and service inventory.",
+  "category": "infrastructure",
+  "homepage": "https://nmap.org/",
+  "tags": [
+    "network",
+    "authorized",
+    "batch"
+  ],
+  "commands": [
+    "nmap"
+  ],
+  "supports": [
+    "domain",
+    "ip"
+  ],
+  "batch": true,
+  "lifecycle": {
+    "install": "install.sh",
+    "update": "update.sh",
+    "remove": "remove.sh",
+    "doctor": "doctor.sh"
+  },
+  "requires_root": {
+    "install": true,
+    "update": true,
+    "remove": true,
+    "doctor": false
+  },
+  "adapters": {
+    "domain": {
+      "command": [
+        "nmap",
+        "-sV",
+        "--top-ports",
+        "100",
+        "-oA",
+        "results",
+        "{target}"
+      ]
+    },
+    "ip": {
+      "command": [
+        "nmap",
+        "-sV",
+        "--top-ports",
+        "100",
+        "-oA",
+        "results",
+        "{target}"
+      ]
+    }
+  },
+  "notes": "Use only on systems you own or are explicitly authorized to assess."
+}

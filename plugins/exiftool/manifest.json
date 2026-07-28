@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "plugin_version": "1",
+  "id": "exiftool",
+  "name": "ExifTool",
+  "description": "Extract metadata from images and documents.",
+  "category": "metadata",
+  "homepage": "https://exiftool.org/",
+  "tags": [
+    "images",
+    "documents",
+    "batch"
+  ],
+  "commands": [
+    "exiftool"
+  ],
+  "supports": [
+    "image",
+    "file"
+  ],
+  "batch": true,
+  "lifecycle": {
+    "install": "install.sh",
+    "update": "update.sh",
+    "remove": "remove.sh",
+    "doctor": "doctor.sh"
+  },
+  "requires_root": {
+    "install": true,
+    "update": true,
+    "remove": true,
+    "doctor": false
+  },
+  "adapters": {
+    "image": {
+      "command": [
+        "exiftool",
+        "-json",
+        "-G",
+        "-a",
+        "-u",
+        "{target}"
+      ]
+    },
+    "file": {
+      "command": [
+        "exiftool",
+        "-json",
+        "-G",
+        "-a",
+        "-u",
+        "{target}"
+      ]
+    }
+  }
+}
