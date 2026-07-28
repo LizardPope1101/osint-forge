@@ -93,3 +93,12 @@ arrays rather than interpolated shell strings.
 
 Copy `docs/plugin-template` to start a new plugin. See
 [`docs/PLUGIN-API.md`](docs/PLUGIN-API.md) for the full contract.
+
+## Uninstall the framework
+
+```bash
+sudo ./scripts/uninstall-framework.sh
+```
+
+This removes the OSINT Forge launcher and framework files. Installed
+third-party tools and case data are left intact.
