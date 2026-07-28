@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 LizardPope1101
+# SPDX-License-Identifier: GPL-3.0-or-later
 source "${OSINT_FORGE_ROOT}/scripts/plugin-common.sh"
 need "ghunt"
-"ghunt" --help >/dev/null 2>&1 || true
+"ghunt" --help >/dev/null
 say "OK: ghunt"

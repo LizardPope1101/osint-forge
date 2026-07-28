@@ -27,13 +27,11 @@ material that you do not have the right to distribute.
 Before opening a pull request, run:
 
 ```bash
-python3 -m unittest discover -s tests -v
-./bin/osint forge validate
-bash -n bootstrap.sh bin/osint scripts/*.sh plugins/*/*.sh docs/plugin-template/*.sh
+./scripts/dev-check.sh
 ```
 
 GitHub Actions repeats these checks and also runs ShellCheck and a Debian
-container smoke test.
+container integration test across the supported Python versions.
 
 ## Adding a plugin
 
