@@ -17,7 +17,6 @@ find /usr/local/share/osint-forge -type f -name '*.sh' -exec chmod 0755 {} +
 chmod 0755 /usr/local/share/osint-forge/forge/osint_forge.py
 
 install -m 0755 "$ROOT/bin/osint" /usr/local/bin/osint
-install -d -m 0755 /var/lib/osint-forge/installed
 install -d -m 0755 /etc/osint-forge
 
 user_config="$TARGET_HOME/.config/osint-forge"
