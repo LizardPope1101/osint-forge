@@ -7,6 +7,8 @@ stable release, minor versions may include breaking changes.
 
 ## Unreleased
 
+## 0.3.0 - 2026-07-28
+
 ### Added
 
 - Versioned case workspaces with documented purpose and authorization scope
@@ -23,6 +25,14 @@ stable release, minor versions may include breaking changes.
   and run directories use owner-only permissions
 - Case IDs, symbolic-link paths, and report destinations are validated to
   prevent directory traversal or case-data escape
+- Custom reports cannot overwrite case metadata, append-only activity logs,
+  raw-run records, or existing files without an explicit safe override
+- Batch output roots are restricted to owner-only permissions
+
+### Fixed
+
+- Development checks run cleanly from GitHub source archives that do not
+  contain Git metadata
 
 ## 0.2.0 - 2026-07-28
 
