@@ -19,12 +19,14 @@ import tempfile
 import time
 from typing import Any, Iterable
 
-__version__ = "0.2.0"
+__version__ = "0.3.0-dev"
 
 SYSTEM_ROOT = Path("/usr/local/share/osint-forge")
 STATE_ROOT = Path.home() / ".local/state/osint-forge"
 CONFIG_ROOT = Path("/etc/osint-forge")
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
+CASE_SCHEMA = 1
+CASE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 EMAIL_RE = re.compile(r"^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,63}$", re.I)
 DOMAIN_RE = re.compile(r"^(?=.{1,253}$)(?:[A-Z0-9](?:[A-Z0-9\-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,63}$", re.I)
@@ -77,6 +79,37 @@ def write_private_json(path: Path, data: dict[str, Any]) -> None:
         raise
 
 
+def write_private_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.parent.chmod(0o700)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    descriptor = os.open(
+        temporary,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+        0o600,
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        temporary.replace(path)
+        path.chmod(0o600)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def secure_case_directory(path: Path, root: Path) -> None:
+    if path != root and root not in path.parents:
+        raise RuntimeError(f"Refusing case directory outside {root}: {path}")
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    current = path
+    while True:
+        current.chmod(0o700)
+        if current == root:
+            break
+        current = current.parent
+
+
 def open_private_log(path: Path):
     descriptor = os.open(
         path,
@@ -85,6 +118,139 @@ def open_private_log(path: Path):
     )
     os.fchmod(descriptor, 0o600)
     return os.fdopen(descriptor, "w", encoding="utf-8")
+
+
+def cases_root() -> Path:
+    override = os.environ.get("OSINT_FORGE_CASES")
+    root = (
+        Path(override).expanduser().resolve()
+        if override
+        else (Path.home() / "OSINT-Cases").resolve()
+    )
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    root.chmod(0o700)
+    return root
+
+
+def validate_case_id(case_id: str) -> str:
+    if not CASE_ID_RE.fullmatch(case_id):
+        raise SystemExit(
+            "Case IDs must be 1-64 characters using letters, numbers, '.', '_', "
+            "or '-', and must start with a letter or number."
+        )
+    return case_id
+
+
+def case_path(case_id: str, *, must_exist: bool = True) -> Path:
+    validate_case_id(case_id)
+    root = cases_root()
+    path = root / case_id
+    if path.is_symlink():
+        raise SystemExit(f"Refusing symbolic-link case directory: {path}")
+    if must_exist and not path.is_dir():
+        raise SystemExit(f"Unknown case: {case_id}")
+    return path
+
+
+def append_case_activity(path: Path, event: str, **details: Any) -> None:
+    log_path = path / "activity.jsonl"
+    descriptor = os.open(
+        log_path,
+        os.O_WRONLY | os.O_CREAT | os.O_APPEND,
+        0o600,
+    )
+    os.fchmod(descriptor, 0o600)
+    entry = {"timestamp": now(), "event": event, **details}
+    with os.fdopen(descriptor, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry, sort_keys=True) + "\n")
+
+
+def migrate_case(path: Path, metadata: dict[str, Any]) -> dict[str, Any]:
+    schema = metadata.get("schema", 0)
+    if not isinstance(schema, int) or schema < 0:
+        raise SystemExit(f"{path.name}: invalid case schema")
+    if schema > CASE_SCHEMA:
+        raise SystemExit(
+            f"{path.name}: case schema {schema} is newer than supported schema "
+            f"{CASE_SCHEMA}"
+        )
+    if schema == 0:
+        metadata["schema"] = 1
+        metadata.setdefault("targets", [])
+        metadata.setdefault("jobs", {})
+        metadata.setdefault("updated_at", now())
+        write_private_json(path / "case.json", metadata)
+        append_case_activity(path, "case_migrated", from_schema=0, to_schema=1)
+    return metadata
+
+
+def load_case(case_id: str) -> tuple[Path, dict[str, Any]]:
+    path = case_path(case_id)
+    metadata_path = path / "case.json"
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise SystemExit(f"{case_id}: missing case.json")
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{case_id}: invalid case.json: {exc}") from exc
+    if not isinstance(metadata, dict):
+        raise SystemExit(f"{case_id}: case.json must contain an object")
+    metadata = migrate_case(path, metadata)
+    required = {
+        "schema", "id", "purpose", "authorization_scope", "created_at",
+        "updated_at", "targets", "jobs",
+    }
+    missing = sorted(required - set(metadata))
+    if missing:
+        raise SystemExit(f"{case_id}: case metadata missing: {', '.join(missing)}")
+    if metadata["id"] != case_id:
+        raise SystemExit(f"{case_id}: case ID does not match its directory")
+    if not isinstance(metadata["targets"], list) or not isinstance(metadata["jobs"], dict):
+        raise SystemExit(f"{case_id}: invalid targets or jobs collection")
+    path.chmod(0o700)
+    metadata_path.chmod(0o600)
+    return path, metadata
+
+
+def save_case(path: Path, metadata: dict[str, Any]) -> None:
+    metadata["updated_at"] = now()
+    write_private_json(path / "case.json", metadata)
+
+
+def target_id(target_type: str, value: str) -> str:
+    digest = hashlib.sha256(f"{target_type}\0{value}".encode()).hexdigest()[:16]
+    return f"{target_type}-{digest}"
+
+
+def case_job_id(plugin_id: str, target_type: str, value: str) -> str:
+    digest = hashlib.sha256(
+        f"{plugin_id}\0{target_type}\0{value}".encode()
+    ).hexdigest()[:20]
+    return f"{plugin_id}-{digest}"
+
+
+def create_case_run_directory(path: Path) -> Path:
+    runs = path / "runs"
+    runs.mkdir(mode=0o700, exist_ok=True)
+    runs.chmod(0o700)
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    for attempt in range(1000):
+        name = stamp if attempt == 0 else f"{stamp}-{attempt}"
+        candidate = runs / name
+        try:
+            candidate.mkdir(mode=0o700)
+            return candidate
+        except FileExistsError:
+            continue
+    raise RuntimeError(f"Could not allocate a run directory under {runs}")
+
+
+def normalize_case_target(target_type: str, value: str) -> str:
+    if target_type in {"image", "file"}:
+        value = str(Path(value).expanduser().resolve())
+    if not validate_target(target_type, value):
+        raise SystemExit(f"Invalid {target_type}: {value}")
+    return value
 
 
 def load_manifest(plugin_dir: Path) -> dict[str, Any]:
@@ -717,6 +883,424 @@ def cmd_batch(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def cmd_case_create(args: argparse.Namespace) -> int:
+    validate_case_id(args.case)
+    path = case_path(args.case, must_exist=False)
+    if path.exists():
+        raise SystemExit(f"Case already exists: {args.case}")
+    path.mkdir(mode=0o700)
+    for directory in ("runs", "notes", "findings"):
+        (path / directory).mkdir(mode=0o700)
+    timestamp = now()
+    metadata = {
+        "schema": CASE_SCHEMA,
+        "id": args.case,
+        "purpose": args.purpose.strip(),
+        "authorization_scope": args.authorization.strip(),
+        "created_at": timestamp,
+        "updated_at": timestamp,
+        "targets": [],
+        "jobs": {},
+    }
+    if not metadata["purpose"] or not metadata["authorization_scope"]:
+        shutil.rmtree(path)
+        raise SystemExit("Purpose and authorization scope cannot be empty.")
+    write_private_json(path / "case.json", metadata)
+    append_case_activity(
+        path,
+        "case_created",
+        purpose=metadata["purpose"],
+        authorization_scope=metadata["authorization_scope"],
+        schema=CASE_SCHEMA,
+    )
+    print(f"Created case: {args.case}")
+    print(f"Location: {path}")
+    return 0
+
+
+def cmd_case_add(args: argparse.Namespace) -> int:
+    path, metadata = load_case(args.case)
+    value = normalize_case_target(args.type, args.target)
+    identifier = target_id(args.type, value)
+    if any(target.get("id") == identifier for target in metadata["targets"]):
+        print(f"SKIP     {args.type}: target already exists in {args.case}")
+        return 0
+    target = {
+        "id": identifier,
+        "type": args.type,
+        "value": value,
+        "added_at": now(),
+    }
+    metadata["targets"].append(target)
+    save_case(path, metadata)
+    append_case_activity(
+        path,
+        "target_added",
+        target_id=identifier,
+        target_type=args.type,
+    )
+    print(f"Added {args.type} target to {args.case}: {value}")
+    return 0
+
+
+def case_jobs(
+    metadata: dict[str, Any],
+    requested_plugins: list[str],
+    *,
+    include_uninstalled: bool,
+) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
+    cat = catalog()
+    unknown = sorted(set(requested_plugins) - set(cat))
+    if unknown:
+        raise SystemExit(f"Unknown case plugin(s): {', '.join(unknown)}")
+    jobs = []
+    for target in metadata["targets"]:
+        for plugin_id, (_, manifest) in cat.items():
+            if requested_plugins and plugin_id not in requested_plugins:
+                continue
+            if not manifest.get("batch", False):
+                continue
+            if target["type"] not in manifest.get("supports", []):
+                continue
+            if not include_uninstalled and not is_installed(plugin_id):
+                continue
+            jobs.append((plugin_id, manifest, target))
+    return jobs
+
+
+def cmd_case_run(args: argparse.Namespace) -> int:
+    path, metadata = load_case(args.case)
+    if not metadata["targets"]:
+        raise SystemExit(f"{args.case}: add at least one target before running the case")
+    jobs = case_jobs(metadata, args.plugins, include_uninstalled=args.dry_run)
+    if not jobs:
+        print("No compatible installed plugins matched the case targets.", file=sys.stderr)
+        return 1
+
+    pending = []
+    skipped = []
+    for plugin_id, manifest, target in jobs:
+        identifier = case_job_id(plugin_id, target["type"], target["value"])
+        prior = metadata["jobs"].get(identifier, {})
+        if (
+            not args.rerun
+            and prior.get("status") == "completed"
+            and prior.get("exit_code") == 0
+        ):
+            skipped.append(identifier)
+            continue
+        pending.append((identifier, plugin_id, manifest, target))
+
+    if not pending:
+        print(f"Case {args.case} is up to date; {len(skipped)} successful job(s) skipped.")
+        return 0
+
+    run_dir = create_case_run_directory(path)
+    run_id = run_dir.name
+    raw_root = run_dir / "raw"
+    raw_root.mkdir(mode=0o700)
+    started_at = now()
+    run_metadata: dict[str, Any] = {
+        "schema": 1,
+        "id": run_id,
+        "case_id": args.case,
+        "framework_version": __version__,
+        "started_at": started_at,
+        "completed_at": None,
+        "status": "running",
+        "dry_run": args.dry_run,
+        "requested_plugins": args.plugins,
+        "skipped_jobs": skipped,
+        "planned_jobs": [],
+        "results": [],
+    }
+    for identifier, plugin_id, manifest, target in pending:
+        plugin_dir, _ = require_plugin(plugin_id)
+        output = (
+            raw_root
+            / f"{target['type']}s"
+            / safe_slug(target["value"])
+            / plugin_id
+        )
+        run_metadata["planned_jobs"].append({
+            "job_id": identifier,
+            "plugin": plugin_id,
+            "plugin_version": manifest["plugin_version"],
+            "target_id": target["id"],
+            "target_type": target["type"],
+            "target": target["value"],
+            "command": adapter_command(
+                plugin_dir, manifest, target["type"], target["value"], output
+            ),
+            "output": str(output.relative_to(path)),
+        })
+    write_private_json(run_dir / "run.json", run_metadata)
+    append_case_activity(
+        path,
+        "run_started",
+        run_id=run_id,
+        job_count=len(pending),
+        skipped_count=len(skipped),
+        dry_run=args.dry_run,
+    )
+    print(
+        f"Case: {args.case} | Run: {run_id} | "
+        f"Jobs: {len(pending)} | Skipped: {len(skipped)}"
+    )
+
+    def execute(job):
+        identifier, plugin_id, manifest, target = job
+        output = (
+            raw_root
+            / f"{target['type']}s"
+            / safe_slug(target["value"])
+            / plugin_id
+        )
+        secure_case_directory(output, raw_root)
+        began = now()
+        if args.dry_run:
+            plugin_dir, _ = require_plugin(plugin_id)
+            command = adapter_command(
+                plugin_dir, manifest, target["type"], target["value"], output
+            )
+            preview = {
+                "plugin": plugin_id,
+                "plugin_version": manifest["plugin_version"],
+                "framework_version": __version__,
+                "target_id": target["id"],
+                "target_type": target["type"],
+                "target": target["value"],
+                "command": command,
+                "exit_code": 0,
+                "dry_run": True,
+                "started_at": began,
+                "completed_at": now(),
+            }
+            write_private_json(output / "status.json", preview)
+            print(f"DRY      {plugin_id}: {shlex.join(command)}")
+            return identifier, preview, output
+        rc = run_adapter(
+            plugin_id, target["type"], target["value"], output, False
+        )
+        status_path = output / "status.json"
+        if status_path.is_file():
+            result = json.loads(status_path.read_text(encoding="utf-8"))
+        else:
+            result = {
+                "plugin": plugin_id,
+                "target_type": target["type"],
+                "target": target["value"],
+                "exit_code": rc,
+                "error": "adapter did not write status.json",
+                "completed_at": now(),
+            }
+        result.update({
+            "plugin_version": manifest["plugin_version"],
+            "framework_version": __version__,
+            "target_id": target["id"],
+            "started_at": result.get("started_at", began),
+        })
+        write_private_json(status_path, result)
+        return identifier, result, output
+
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs)
+    future_jobs = {executor.submit(execute, job): job for job in pending}
+    interrupted = False
+    try:
+        for future in concurrent.futures.as_completed(future_jobs):
+            job = future_jobs[future]
+            try:
+                identifier, result, output = future.result()
+            except Exception as exc:
+                identifier, plugin_id, manifest, target = job
+                output = (
+                    raw_root
+                    / f"{target['type']}s"
+                    / safe_slug(target["value"])
+                    / plugin_id
+                )
+                secure_case_directory(output, raw_root)
+                result = {
+                    "plugin": plugin_id,
+                    "plugin_version": manifest["plugin_version"],
+                    "framework_version": __version__,
+                    "target_id": target["id"],
+                    "target_type": target["type"],
+                    "target": target["value"],
+                    "exit_code": 70,
+                    "error": f"internal execution error: {exc}",
+                    "completed_at": now(),
+                }
+                write_private_json(output / "status.json", result)
+            relative_output = str(output.relative_to(path))
+            state = {
+                "status": (
+                    "previewed"
+                    if args.dry_run
+                    else ("completed" if result["exit_code"] == 0 else "failed")
+                ),
+                "exit_code": result["exit_code"],
+                "plugin": result["plugin"],
+                "plugin_version": result["plugin_version"],
+                "target_id": result["target_id"],
+                "last_run": run_id,
+                "output": relative_output,
+                "completed_at": result["completed_at"],
+            }
+            metadata["jobs"][identifier] = state
+            run_metadata["results"].append({"job_id": identifier, **state})
+    except KeyboardInterrupt:
+        interrupted = True
+        for future in future_jobs:
+            future.cancel()
+    finally:
+        executor.shutdown(wait=not interrupted, cancel_futures=interrupted)
+
+    run_metadata["completed_at"] = now()
+    if interrupted:
+        run_metadata["status"] = "interrupted"
+    else:
+        failures = sum(
+            result["exit_code"] != 0 for result in run_metadata["results"]
+        )
+        run_metadata["status"] = "failed" if failures else "completed"
+    write_private_json(run_dir / "run.json", run_metadata)
+    save_case(path, metadata)
+    append_case_activity(
+        path,
+        "run_finished",
+        run_id=run_id,
+        status=run_metadata["status"],
+        completed_jobs=len(run_metadata["results"]),
+    )
+    if interrupted:
+        print("Run interrupted; completed jobs were saved and pending jobs can be resumed.")
+        return 130
+    failures = sum(
+        result["exit_code"] != 0 for result in run_metadata["results"]
+    )
+    print(f"Completed with {failures} failed job(s).")
+    return 1 if failures else 0
+
+
+def case_status_data(metadata: dict[str, Any]) -> dict[str, Any]:
+    states = list(metadata["jobs"].values())
+    return {
+        "schema": metadata["schema"],
+        "id": metadata["id"],
+        "purpose": metadata["purpose"],
+        "authorization_scope": metadata["authorization_scope"],
+        "created_at": metadata["created_at"],
+        "updated_at": metadata["updated_at"],
+        "target_count": len(metadata["targets"]),
+        "targets_by_type": {
+            target_type: sum(
+                target["type"] == target_type for target in metadata["targets"]
+            )
+            for target_type in sorted(
+                {target["type"] for target in metadata["targets"]}
+            )
+        },
+        "job_count": len(states),
+        "completed_jobs": sum(state.get("status") == "completed" for state in states),
+        "failed_jobs": sum(state.get("status") == "failed" for state in states),
+        "previewed_jobs": sum(state.get("status") == "previewed" for state in states),
+    }
+
+
+def cmd_case_status(args: argparse.Namespace) -> int:
+    _, metadata = load_case(args.case)
+    status = case_status_data(metadata)
+    if args.json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print(f"Case:          {status['id']}")
+    print(f"Purpose:       {status['purpose']}")
+    print(f"Authorization: {status['authorization_scope']}")
+    print(f"Targets:       {status['target_count']}")
+    for target_type, count in status["targets_by_type"].items():
+        print(f"  {target_type}: {count}")
+    print(f"Jobs:          {status['job_count']}")
+    print(f"Completed:     {status['completed_jobs']}")
+    print(f"Failed:        {status['failed_jobs']}")
+    print(f"Previewed:     {status['previewed_jobs']}")
+    return 0
+
+
+def cmd_case_report(args: argparse.Namespace) -> int:
+    path, metadata = load_case(args.case)
+    status = case_status_data(metadata)
+    if args.output:
+        requested = args.output.expanduser()
+        output = (
+            requested.resolve()
+            if requested.is_absolute()
+            else (path / requested).resolve()
+        )
+    else:
+        output = path / "report.md"
+    if not output.is_relative_to(path):
+        raise SystemExit("Report output must remain inside the case directory.")
+    lines = [
+        f"# OSINT Forge Case: {metadata['id']}",
+        "",
+        f"- **Schema:** {metadata['schema']}",
+        f"- **Purpose:** {metadata['purpose']}",
+        f"- **Authorization scope:** {metadata['authorization_scope']}",
+        f"- **Created:** {metadata['created_at']}",
+        f"- **Updated:** {metadata['updated_at']}",
+        "",
+        "## Targets",
+        "",
+        "| Type | Target | Added |",
+        "|---|---|---|",
+    ]
+    for target in metadata["targets"]:
+        escaped = target["value"].replace("|", "\\|")
+        lines.append(
+            f"| {target['type']} | `{escaped}` | {target['added_at']} |"
+        )
+    lines.extend([
+        "",
+        "## Execution status",
+        "",
+        f"- Completed jobs: {status['completed_jobs']}",
+        f"- Failed jobs: {status['failed_jobs']}",
+        "",
+        "| Plugin | Target ID | Status | Exit | Raw output |",
+        "|---|---|---|---:|---|",
+    ])
+    for state in sorted(
+        metadata["jobs"].values(),
+        key=lambda item: (item.get("plugin", ""), item.get("target_id", "")),
+    ):
+        raw = state.get("output", "")
+        raw_link = (
+            Path(os.path.relpath(path / raw, output.parent)).as_posix()
+            if raw
+            else ""
+        )
+        lines.append(
+            f"| {state.get('plugin', '')} | `{state.get('target_id', '')}` | "
+            f"{state.get('status', '')} | {state.get('exit_code', '')} | "
+            f"[preserved output]({raw_link}) |"
+        )
+    lines.extend([
+        "",
+        "> This report summarizes execution records. Raw tool output is not a "
+        "verified finding. Validate every lead independently.",
+        "",
+    ])
+    write_private_text(output, "\n".join(lines))
+    append_case_activity(
+        path,
+        "report_generated",
+        output=str(output.relative_to(path)) if output.is_relative_to(path) else str(output),
+    )
+    print(f"Report: {output}")
+    return 0
+
+
 def cmd_categories(args: argparse.Namespace) -> int:
     groups: dict[str, list[str]] = {}
     for pid, (_, m) in catalog().items():
@@ -829,6 +1413,43 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--jobs", type=int, default=2, choices=range(1, 9), metavar="1-8")
     p.add_argument("-n", "--dry-run", action="store_true")
     p.set_defaults(func=cmd_batch)
+
+    case = sub.add_parser("case", help="manage durable, private investigation cases")
+    cs = case.add_subparsers(dest="case_command", required=True)
+
+    p = cs.add_parser("create", help="create a versioned case workspace")
+    p.add_argument("case")
+    p.add_argument("--purpose", required=True)
+    p.add_argument(
+        "--authorization",
+        required=True,
+        help="document the legal or organizational authorization scope",
+    )
+    p.set_defaults(func=cmd_case_create)
+
+    p = cs.add_parser("add", help="add a validated target to a case")
+    p.add_argument("case")
+    p.add_argument("type", choices=sorted(TARGET_TYPES))
+    p.add_argument("target")
+    p.set_defaults(func=cmd_case_add)
+
+    p = cs.add_parser("run", help="run or resume compatible case jobs")
+    p.add_argument("case")
+    p.add_argument("--plugins", nargs="*", default=[])
+    p.add_argument("--jobs", type=int, default=2, choices=range(1, 9), metavar="1-8")
+    p.add_argument("--rerun", action="store_true", help="rerun successful jobs")
+    p.add_argument("-n", "--dry-run", action="store_true")
+    p.set_defaults(func=cmd_case_run)
+
+    p = cs.add_parser("status", help="show case target and execution status")
+    p.add_argument("case")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_case_status)
+
+    p = cs.add_parser("report", help="write a provenance-linked Markdown summary")
+    p.add_argument("case")
+    p.add_argument("-o", "--output", type=Path)
+    p.set_defaults(func=cmd_case_report)
 
     return parser
 
