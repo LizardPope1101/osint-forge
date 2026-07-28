@@ -1201,7 +1201,9 @@ def cmd_case_run(args: argparse.Namespace) -> int:
         for future in future_jobs:
             future.cancel()
     finally:
-        executor.shutdown(wait=not interrupted, cancel_futures=interrupted)
+        # Running workers cannot be cancelled. Wait for them to settle before
+        # writing final provenance or allowing temporary/case storage cleanup.
+        executor.shutdown(wait=True, cancel_futures=interrupted)
 
     run_metadata["completed_at"] = now()
     if interrupted:
