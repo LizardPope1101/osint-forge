@@ -359,6 +359,297 @@ class CliTests(unittest.TestCase):
                 osint_forge.cmd_batch(args)
 
 
+class CaseManagementTests(unittest.TestCase):
+    def create_case(self, root: Path, case_id: str = "case-001"):
+        env = {"OSINT_FORGE_CASES": str(root)}
+        with mock.patch.dict(os.environ, env):
+            rc = osint_forge.cmd_case_create(
+                argparse.Namespace(
+                    case=case_id,
+                    purpose="Synthetic integration test",
+                    authorization="Owned test fixtures only",
+                )
+            )
+        self.assertEqual(rc, 0)
+        return root / case_id
+
+    def add_target(
+        self,
+        root: Path,
+        case_id: str = "case-001",
+        target_type: str = "username",
+        value: str = "example_handle",
+    ):
+        with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+            return osint_forge.cmd_case_add(
+                argparse.Namespace(case=case_id, type=target_type, target=value)
+            )
+
+    def run_args(self, case_id: str = "case-001", **overrides):
+        values = {
+            "case": case_id,
+            "plugins": ["maigret", "sherlock"],
+            "jobs": 2,
+            "rerun": False,
+            "dry_run": False,
+        }
+        values.update(overrides)
+        return argparse.Namespace(**values)
+
+    def test_case_create_and_add_are_private_and_append_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            case = self.create_case(root)
+            self.assertEqual(self.add_target(root), 0)
+            self.assertEqual(self.add_target(root), 0)
+
+            metadata = json.loads((case / "case.json").read_text(encoding="utf-8"))
+            self.assertEqual(metadata["schema"], osint_forge.CASE_SCHEMA)
+            self.assertEqual(metadata["purpose"], "Synthetic integration test")
+            self.assertEqual(metadata["authorization_scope"], "Owned test fixtures only")
+            self.assertEqual(len(metadata["targets"]), 1)
+            self.assertEqual((case.stat().st_mode & 0o777), 0o700)
+            self.assertEqual(((case / "case.json").stat().st_mode & 0o777), 0o600)
+            self.assertEqual(((case / "activity.jsonl").stat().st_mode & 0o777), 0o600)
+
+            events = [
+                json.loads(line)["event"]
+                for line in (case / "activity.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(events, ["case_created", "target_added"])
+
+    def test_case_cli_end_to_end(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            cli = osint_forge.SOURCE_ROOT / "bin" / "osint"
+            env = {**os.environ, "OSINT_FORGE_CASES": str(root)}
+            commands = [
+                [
+                    str(cli), "case", "create", "cli-case",
+                    "--purpose", "CLI integration",
+                    "--authorization", "Owned fixture",
+                ],
+                [str(cli), "case", "add", "cli-case", "username", "example_handle"],
+                [
+                    str(cli), "case", "run", "cli-case",
+                    "--plugins", "maigret", "sherlock", "--dry-run",
+                ],
+                [str(cli), "case", "status", "cli-case", "--json"],
+                [str(cli), "case", "report", "cli-case"],
+            ]
+            completed = []
+            for command in commands:
+                result = subprocess.run(
+                    command,
+                    env=env,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                completed.append(result)
+            status = json.loads(completed[3].stdout)
+            self.assertEqual(status["target_count"], 1)
+            self.assertEqual(status["previewed_jobs"], 2)
+            self.assertTrue((root / "cli-case" / "report.md").is_file())
+
+    def test_case_rejects_unsafe_identifier_and_symlink(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+                with self.assertRaises(SystemExit):
+                    osint_forge.cmd_case_create(
+                        argparse.Namespace(
+                            case="../escape",
+                            purpose="test",
+                            authorization="test",
+                        )
+                    )
+                root.mkdir(exist_ok=True)
+                (root / "linked").symlink_to(Path(temp))
+                with self.assertRaisesRegex(SystemExit, "symbolic-link"):
+                    osint_forge.load_case("linked")
+
+    def test_dry_run_preserves_provenance_without_completing_jobs(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            case = self.create_case(root)
+            self.add_target(root)
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+                rc = osint_forge.cmd_case_run(
+                    self.run_args(dry_run=True)
+                )
+            self.assertEqual(rc, 0)
+            metadata = json.loads((case / "case.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                {state["status"] for state in metadata["jobs"].values()},
+                {"previewed"},
+            )
+            status_files = list((case / "runs").glob("*/raw/**/status.json"))
+            self.assertEqual(len(status_files), 2)
+            run_metadata = json.loads(
+                next((case / "runs").glob("*/run.json")).read_text(encoding="utf-8")
+            )
+            self.assertEqual(len(run_metadata["planned_jobs"]), 2)
+            self.assertTrue(
+                all(isinstance(job["command"], list) for job in run_metadata["planned_jobs"])
+            )
+            for status_file in status_files:
+                status = json.loads(status_file.read_text(encoding="utf-8"))
+                self.assertTrue(status["dry_run"])
+                self.assertEqual(status["framework_version"], osint_forge.__version__)
+                self.assertIn("plugin_version", status)
+                self.assertIsInstance(status["command"], list)
+            for directory in [case, *[p for p in case.rglob("*") if p.is_dir()]]:
+                self.assertEqual((directory.stat().st_mode & 0o777), 0o700)
+            for file_path in [p for p in case.rglob("*") if p.is_file()]:
+                self.assertEqual((file_path.stat().st_mode & 0o777), 0o600)
+
+    def test_failed_job_resumes_while_successful_job_is_skipped(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            case = self.create_case(root)
+            self.add_target(root)
+
+            def first_run(plugin, target_type, value, output, dry_run):
+                output.mkdir(parents=True, exist_ok=True)
+                rc = 1 if plugin == "sherlock" else 0
+                osint_forge.write_private_json(
+                    output / "status.json",
+                    {
+                        "plugin": plugin,
+                        "target_type": target_type,
+                        "target": value,
+                        "command": [plugin, value],
+                        "exit_code": rc,
+                        "completed_at": osint_forge.now(),
+                    },
+                )
+                return rc
+
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}), \
+                 mock.patch.object(osint_forge, "is_installed", return_value=True), \
+                 mock.patch.object(osint_forge, "run_adapter", side_effect=first_run):
+                first_rc = osint_forge.cmd_case_run(self.run_args(jobs=1))
+            self.assertEqual(first_rc, 1)
+
+            metadata = json.loads((case / "case.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                {state["status"] for state in metadata["jobs"].values()},
+                {"completed", "failed"},
+            )
+
+            def resumed_run(plugin, target_type, value, output, dry_run):
+                output.mkdir(parents=True, exist_ok=True)
+                osint_forge.write_private_json(
+                    output / "status.json",
+                    {
+                        "plugin": plugin,
+                        "target_type": target_type,
+                        "target": value,
+                        "command": [plugin, value],
+                        "exit_code": 0,
+                        "completed_at": osint_forge.now(),
+                    },
+                )
+                return 0
+
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}), \
+                 mock.patch.object(osint_forge, "is_installed", return_value=True), \
+                 mock.patch.object(osint_forge, "run_adapter", side_effect=resumed_run) as run:
+                second_rc = osint_forge.cmd_case_run(self.run_args(jobs=1))
+            self.assertEqual(second_rc, 0)
+            self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_args.args[0], "sherlock")
+            metadata = json.loads((case / "case.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                {state["status"] for state in metadata["jobs"].values()},
+                {"completed"},
+            )
+
+    def test_internal_job_error_is_recorded_and_resumable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            case = self.create_case(root)
+            self.add_target(root)
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}), \
+                 mock.patch.object(osint_forge, "is_installed", return_value=True), \
+                 mock.patch.object(
+                     osint_forge,
+                     "run_adapter",
+                     side_effect=RuntimeError("synthetic worker failure"),
+                 ):
+                rc = osint_forge.cmd_case_run(
+                    self.run_args(plugins=["maigret"], jobs=1)
+                )
+            self.assertEqual(rc, 1)
+            metadata = json.loads((case / "case.json").read_text(encoding="utf-8"))
+            state = next(iter(metadata["jobs"].values()))
+            self.assertEqual(state["status"], "failed")
+            self.assertEqual(state["exit_code"], 70)
+            status = json.loads(
+                next((case / "runs").glob("*/raw/**/status.json")).read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertIn("synthetic worker failure", status["error"])
+
+    def test_case_report_links_raw_output_and_cannot_escape_case(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            case = self.create_case(root)
+            self.add_target(root)
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+                osint_forge.cmd_case_run(self.run_args(dry_run=True))
+                rc = osint_forge.cmd_case_report(
+                    argparse.Namespace(
+                        case="case-001",
+                        output=Path("summaries/report.md"),
+                    )
+                )
+                with self.assertRaisesRegex(SystemExit, "inside the case"):
+                    osint_forge.cmd_case_report(
+                        argparse.Namespace(
+                            case="case-001",
+                            output=Path("../escaped.md"),
+                        )
+                    )
+            self.assertEqual(rc, 0)
+            report = case / "summaries" / "report.md"
+            content = report.read_text(encoding="utf-8")
+            self.assertIn("Raw tool output is not a verified finding", content)
+            self.assertIn("[preserved output](../runs/", content)
+            self.assertEqual((report.stat().st_mode & 0o777), 0o600)
+
+    def test_legacy_case_migrates_and_future_schema_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            legacy = root / "legacy"
+            legacy.mkdir(parents=True)
+            osint_forge.write_private_json(
+                legacy / "case.json",
+                {
+                    "id": "legacy",
+                    "purpose": "legacy",
+                    "authorization_scope": "test",
+                    "created_at": osint_forge.now(),
+                },
+            )
+            future = root / "future"
+            future.mkdir()
+            osint_forge.write_private_json(
+                future / "case.json",
+                {"schema": osint_forge.CASE_SCHEMA + 1},
+            )
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+                _, migrated = osint_forge.load_case("legacy")
+                self.assertEqual(migrated["schema"], osint_forge.CASE_SCHEMA)
+                self.assertEqual(migrated["targets"], [])
+                self.assertEqual(migrated["jobs"], {})
+                with self.assertRaisesRegex(SystemExit, "newer than supported"):
+                    osint_forge.load_case("future")
+
+
 class ShellScriptTests(unittest.TestCase):
     def test_missing_dependency_does_not_fail_dry_run(self):
         common = osint_forge.SOURCE_ROOT / "scripts" / "plugin-common.sh"
