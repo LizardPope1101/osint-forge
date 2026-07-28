@@ -19,7 +19,7 @@ import tempfile
 import time
 from typing import Any, Iterable
 
-__version__ = "0.3.0-dev"
+__version__ = "0.3.0"
 
 SYSTEM_ROOT = Path("/usr/local/share/osint-forge")
 STATE_ROOT = Path.home() / ".local/state/osint-forge"
@@ -813,7 +813,8 @@ def safe_slug(value: str) -> str:
 
 def create_run_directory(output_root: Path, name: str, stamp: str | None = None) -> Path:
     """Create a unique batch directory, even for runs started simultaneously."""
-    output_root.mkdir(parents=True, exist_ok=True)
+    output_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    output_root.chmod(0o700)
     timestamp = stamp or dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     label = safe_slug(name).rsplit("--", 1)[0]
     base = output_root / f"{timestamp}-{label}"
@@ -1241,6 +1242,13 @@ def cmd_case_report(args: argparse.Namespace) -> int:
         output = path / "report.md"
     if not output.is_relative_to(path):
         raise SystemExit("Report output must remain inside the case directory.")
+    reserved_files = {path / "case.json", path / "activity.jsonl"}
+    if output in reserved_files or output.is_relative_to(path / "runs"):
+        raise SystemExit("Report output cannot replace reserved case records.")
+    if output.exists() and output != path / "report.md" and not args.force:
+        raise SystemExit(
+            f"Report output already exists: {output}; use --force to replace it."
+        )
     lines = [
         f"# OSINT Forge Case: {metadata['id']}",
         "",
@@ -1449,6 +1457,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = cs.add_parser("report", help="write a provenance-linked Markdown summary")
     p.add_argument("case")
     p.add_argument("-o", "--output", type=Path)
+    p.add_argument("--force", action="store_true", help="replace a custom report file")
     p.set_defaults(func=cmd_case_report)
 
     return parser

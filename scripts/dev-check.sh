@@ -18,5 +18,9 @@ else
     echo "WARN: shellcheck is not installed; skipped shell lint" >&2
 fi
 
-git diff --check
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git diff --check
+else
+    echo "WARN: not a Git worktree; skipped git diff check" >&2
+fi
 echo "All available development checks passed."
