@@ -246,6 +246,7 @@ class ExecutionTests(unittest.TestCase):
             self.assertNotEqual(first, second)
             self.assertTrue(first.is_dir())
             self.assertTrue(second.is_dir())
+            self.assertEqual((root.stat().st_mode & 0o777), 0o700)
 
     def test_batch_executes_matching_plugins_and_writes_summary(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -470,6 +471,69 @@ class CaseManagementTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, "symbolic-link"):
                     osint_forge.load_case("linked")
 
+    def test_case_create_rejects_empty_scope_without_leaving_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+                with self.assertRaisesRegex(SystemExit, "cannot be empty"):
+                    osint_forge.cmd_case_create(
+                        argparse.Namespace(
+                            case="empty-case",
+                            purpose=" ",
+                            authorization="Owned fixture",
+                        )
+                    )
+            self.assertFalse((root / "empty-case").exists())
+
+    def test_file_target_is_normalized_and_invalid_target_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            self.create_case(root)
+            fixture = Path(temp) / "evidence.bin"
+            fixture.write_bytes(b"synthetic evidence")
+            self.assertEqual(
+                self.add_target(root, target_type="file", value=str(fixture)),
+                0,
+            )
+            metadata = json.loads(
+                (root / "case-001" / "case.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(metadata["targets"][0]["value"], str(fixture.resolve()))
+            with self.assertRaisesRegex(SystemExit, "Invalid file"):
+                self.add_target(
+                    root,
+                    target_type="file",
+                    value=str(Path(temp) / "missing.bin"),
+                )
+
+    def test_unknown_case_and_malformed_metadata_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+                with self.assertRaisesRegex(SystemExit, "Unknown case"):
+                    osint_forge.load_case("missing")
+                malformed = root / "malformed"
+                malformed.mkdir()
+                (malformed / "case.json").write_text("{", encoding="utf-8")
+                with self.assertRaisesRegex(SystemExit, "invalid case.json"):
+                    osint_forge.load_case("malformed")
+
+    def test_empty_case_and_unknown_plugin_cannot_start_run(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            self.create_case(root)
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+                with self.assertRaisesRegex(SystemExit, "add at least one target"):
+                    osint_forge.cmd_case_run(
+                        self.run_args(plugins=["maigret"], dry_run=True)
+                    )
+            self.add_target(root)
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+                with self.assertRaisesRegex(SystemExit, "Unknown case plugin"):
+                    osint_forge.cmd_case_run(
+                        self.run_args(plugins=["not-a-plugin"], dry_run=True)
+                    )
+
     def test_dry_run_preserves_provenance_without_completing_jobs(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "cases"
@@ -594,6 +658,33 @@ class CaseManagementTests(unittest.TestCase):
             )
             self.assertIn("synthetic worker failure", status["error"])
 
+    def test_interrupted_run_is_recorded_for_resume(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            case = self.create_case(root)
+            self.add_target(root)
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}), \
+                 mock.patch.object(osint_forge, "is_installed", return_value=True), \
+                 mock.patch(
+                     "concurrent.futures.as_completed",
+                     side_effect=KeyboardInterrupt,
+                 ):
+                rc = osint_forge.cmd_case_run(
+                    self.run_args(plugins=["maigret"], jobs=1)
+                )
+            self.assertEqual(rc, 130)
+            run = json.loads(
+                next((case / "runs").glob("*/run.json")).read_text(encoding="utf-8")
+            )
+            self.assertEqual(run["status"], "interrupted")
+            self.assertEqual(run["results"], [])
+            events = [
+                json.loads(line)
+                for line in (case / "activity.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(events[-1]["event"], "run_finished")
+            self.assertEqual(events[-1]["status"], "interrupted")
+
     def test_case_report_links_raw_output_and_cannot_escape_case(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "cases"
@@ -605,6 +696,7 @@ class CaseManagementTests(unittest.TestCase):
                     argparse.Namespace(
                         case="case-001",
                         output=Path("summaries/report.md"),
+                        force=False,
                     )
                 )
                 with self.assertRaisesRegex(SystemExit, "inside the case"):
@@ -612,9 +704,35 @@ class CaseManagementTests(unittest.TestCase):
                         argparse.Namespace(
                             case="case-001",
                             output=Path("../escaped.md"),
+                            force=False,
                         )
                     )
+                for reserved in ("case.json", "activity.jsonl", "runs/report.md"):
+                    with self.assertRaisesRegex(SystemExit, "reserved case records"):
+                        osint_forge.cmd_case_report(
+                            argparse.Namespace(
+                                case="case-001",
+                                output=Path(reserved),
+                                force=True,
+                            )
+                        )
+                with self.assertRaisesRegex(SystemExit, "already exists"):
+                    osint_forge.cmd_case_report(
+                        argparse.Namespace(
+                            case="case-001",
+                            output=Path("summaries/report.md"),
+                            force=False,
+                        )
+                    )
+                forced = osint_forge.cmd_case_report(
+                    argparse.Namespace(
+                        case="case-001",
+                        output=Path("summaries/report.md"),
+                        force=True,
+                    )
+                )
             self.assertEqual(rc, 0)
+            self.assertEqual(forced, 0)
             report = case / "summaries" / "report.md"
             content = report.read_text(encoding="utf-8")
             self.assertIn("Raw tool output is not a verified finding", content)
@@ -738,6 +856,42 @@ class ShellScriptTests(unittest.TestCase):
             self.assertFalse(stale.exists())
             self.assertEqual(config.read_text(encoding="utf-8"), "[Usernames]\nkeep-me\n")
 
+            cases = sandbox / "cases"
+            runtime_env = {
+                **env,
+                "OSINT_FORGE_ROOT": str(install_root),
+                "OSINT_FORGE_CASES": str(cases),
+            }
+            installed_cli = bin_dir / "osint"
+            installed_commands = [
+                [str(installed_cli), "--version"],
+                [
+                    str(installed_cli), "case", "create", "installed-case",
+                    "--purpose", "Installed CLI integration",
+                    "--authorization", "Owned fixture",
+                ],
+                [
+                    str(installed_cli), "case", "add", "installed-case",
+                    "username", "example_handle",
+                ],
+                [
+                    str(installed_cli), "case", "run", "installed-case",
+                    "--plugins", "maigret", "sherlock", "--dry-run",
+                ],
+                [str(installed_cli), "case", "status", "installed-case", "--json"],
+                [str(installed_cli), "case", "report", "installed-case"],
+            ]
+            for command in installed_commands:
+                completed = subprocess.run(
+                    command,
+                    env=runtime_env,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertTrue((cases / "installed-case" / "report.md").is_file())
+
             removed = subprocess.run(
                 [str(uninstall_script)], env=env, text=True, capture_output=True, check=False
             )
@@ -745,6 +899,7 @@ class ShellScriptTests(unittest.TestCase):
             self.assertFalse(install_root.exists())
             self.assertFalse((bin_dir / "osint").exists())
             self.assertTrue(config.is_file())
+            self.assertTrue((cases / "installed-case" / "case.json").is_file())
 
 
 if __name__ == "__main__":
