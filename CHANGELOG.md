@@ -1,6 +1,22 @@
 # Changelog
 
+All notable changes to OSINT Forge will be documented here.
+
+The project follows [Semantic Versioning](https://semver.org/). Until the first
+stable release, minor versions may include breaking changes.
+
 ## Unreleased
+
+### Added
+
+- Automated GitHub Actions checks for Python, shell, plugin contracts, and a
+  Debian smoke test
+- Unit and integration tests for discovery, target validation, batch parsing,
+  safe slugs, adapter argument boundaries, lifecycle behavior, installation,
+  private output permissions, and dry-run behavior
+- `osint forge validate` with text and JSON output
+- `osint forge version` and global `osint --version`
+- Issue forms, pull-request checklist, CODEOWNERS, and Dependabot configuration
 
 ### Fixed
 
@@ -25,23 +41,6 @@
 - Expand CI coverage across Python 3.10 through 3.13 and run integration tests
   inside the Debian container.
 - Pin GitHub Actions to immutable commit SHAs while retaining Dependabot updates.
-
-All notable changes to OSINT Forge will be documented here.
-
-The project follows [Semantic Versioning](https://semver.org/). Until the first
-stable release, minor versions may include breaking changes.
-
-## Unreleased
-
-### Added
-
-- Automated GitHub Actions checks for Python, shell, plugin contracts, and a
-  Debian smoke test
-- Unit tests for discovery, target validation, batch parsing, safe slugs,
-  adapter argument boundaries, and dry-run behavior
-- `osint forge validate` with text and JSON output
-- `osint forge version` and global `osint --version`
-- Issue forms, pull-request checklist, CODEOWNERS, and Dependabot configuration
 
 ## 0.1.0 - 2026-07-28
 
