@@ -7,10 +7,12 @@ stable release, minor versions may include breaking changes.
 
 ## Unreleased
 
+## 0.2.0 - 2026-07-28
+
 ### Added
 
-- Automated GitHub Actions checks for Python, shell, plugin contracts, and a
-  Debian smoke test
+- Automated GitHub Actions checks for Python, shell, plugin contracts, and
+  clean Debian and Ubuntu lifecycle tests
 - Unit and integration tests for discovery, target validation, batch parsing,
   safe slugs, adapter argument boundaries, lifecycle behavior, installation,
   private output permissions, and dry-run behavior
@@ -39,7 +41,7 @@ stable release, minor versions may include breaking changes.
 ### Changed
 
 - Expand CI coverage across Python 3.10 through 3.13 and run integration tests
-  inside the Debian container.
+  inside clean Debian and Ubuntu containers.
 - Pin GitHub Actions to immutable commit SHAs while retaining Dependabot updates.
 
 ## 0.1.0 - 2026-07-28
