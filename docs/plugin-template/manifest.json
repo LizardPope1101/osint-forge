@@ -6,6 +6,8 @@
   "description": "Replace with a useful description.",
   "category": "misc",
   "homepage": "https://example.org/",
+  "upstream_license": "NOASSERTION",
+  "upstream_license_url": "https://example.org/license",
   "tags": [],
   "commands": [
     "example"

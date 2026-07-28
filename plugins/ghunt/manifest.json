@@ -6,6 +6,8 @@
   "description": "Google-account-focused OSINT framework.",
   "category": "email",
   "homepage": "https://github.com/mxrch/GHunt",
+  "upstream_license": "AGPL-3.0-only",
+  "upstream_license_url": "https://github.com/mxrch/GHunt/blob/master/LICENSE",
   "tags": [
     "google",
     "accounts",

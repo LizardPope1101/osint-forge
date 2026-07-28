@@ -6,6 +6,8 @@
   "description": "Search social networks for a username.",
   "category": "usernames",
   "homepage": "https://github.com/sherlock-project/sherlock",
+  "upstream_license": "MIT",
+  "upstream_license_url": "https://github.com/sherlock-project/sherlock/blob/master/LICENSE",
   "tags": [
     "people",
     "social",

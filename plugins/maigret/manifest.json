@@ -6,6 +6,8 @@
   "description": "Username search with structured reports.",
   "category": "usernames",
   "homepage": "https://github.com/soxoj/maigret",
+  "upstream_license": "MIT",
+  "upstream_license_url": "https://github.com/soxoj/maigret/blob/main/LICENSE",
   "tags": [
     "people",
     "social",

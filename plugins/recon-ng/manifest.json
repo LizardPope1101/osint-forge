@@ -6,6 +6,8 @@
   "description": "Modular reconnaissance framework with workspaces and marketplace modules.",
   "category": "infrastructure",
   "homepage": "https://github.com/lanmaster53/recon-ng",
+  "upstream_license": "GPL-3.0-only",
+  "upstream_license_url": "https://github.com/lanmaster53/recon-ng/blob/master/LICENSE",
   "tags": [
     "framework",
     "domains",

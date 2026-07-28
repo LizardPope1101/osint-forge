@@ -6,6 +6,8 @@
   "description": "Extract metadata from images and documents.",
   "category": "metadata",
   "homepage": "https://exiftool.org/",
+  "upstream_license": "Artistic-1.0-Perl OR GPL-1.0-or-later",
+  "upstream_license_url": "https://exiftool.org/",
   "tags": [
     "images",
     "documents",

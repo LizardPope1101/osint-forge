@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 LizardPope1101
+# SPDX-License-Identifier: GPL-3.0-or-later
 set -Eeuo pipefail
 ROOT="${OSINT_FORGE_ROOT:-/usr/local/share/osint-forge}"
 if [[ ! -f "$ROOT/forge/osint_forge.py" ]]; then

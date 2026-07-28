@@ -24,6 +24,8 @@ The plugin directory name and `manifest.json` `id` must match.
   "description": "One-line description.",
   "category": "usernames",
   "homepage": "https://example.org/",
+  "upstream_license": "MIT",
+  "upstream_license_url": "https://example.org/license",
   "tags": ["people", "batch"],
   "commands": ["example"],
   "supports": ["username"],
@@ -47,6 +49,11 @@ The plugin directory name and `manifest.json` `id` must match.
   }
 }
 ```
+
+`upstream_license` should use an SPDX expression when one exists. Use a
+documented `LicenseRef-...` identifier for a custom license and link directly
+to the authoritative license text. These fields describe the independent
+upstream tool; they do not change the OSINT Forge license.
 
 ## Supported target types
 

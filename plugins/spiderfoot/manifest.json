@@ -6,6 +6,8 @@
   "description": "Automated OSINT collection and correlation framework.",
   "category": "frameworks",
   "homepage": "https://github.com/smicallef/spiderfoot",
+  "upstream_license": "MIT",
+  "upstream_license_url": "https://github.com/smicallef/spiderfoot/blob/master/LICENSE",
   "tags": [
     "automation",
     "correlation",

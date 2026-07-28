@@ -6,6 +6,8 @@
   "description": "Authorized network discovery and service inventory.",
   "category": "infrastructure",
   "homepage": "https://nmap.org/",
+  "upstream_license": "LicenseRef-NPSL",
+  "upstream_license_url": "https://nmap.org/npsl/",
   "tags": [
     "network",
     "authorized",
