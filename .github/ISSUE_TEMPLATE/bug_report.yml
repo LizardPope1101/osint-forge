@@ -1,0 +1,52 @@
+name: Bug report
+description: Report a reproducible OSINT Forge defect
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include targets, credentials, cookies, tokens, personal information, or case data.
+        Report security vulnerabilities privately according to `.github/SECURITY.md`.
+  - type: input
+    id: version
+    attributes:
+      label: OSINT Forge version or commit
+      placeholder: "0.2.0-dev or commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Debian 13, Ubuntu 26.04, etc."
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      description: Redact all sensitive target values.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and redacted logs
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I removed credentials, personal information, target data, cookies, tokens, and case data.
+          required: true
+        - label: This is not a security vulnerability requiring private disclosure.
+          required: true

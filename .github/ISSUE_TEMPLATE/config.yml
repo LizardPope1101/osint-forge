@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/LizardPope1101/osint-forge/security/advisories/new
+    about: Submit security issues privately. Do not open a public issue.
+  - name: Documentation wiki
+    url: https://github.com/LizardPope1101/osint-forge/wiki
+    about: Review installation, usage, plugin, and troubleshooting guidance.

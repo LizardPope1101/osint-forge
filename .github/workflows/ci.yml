@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python and plugin contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile Python
+        run: python -m py_compile forge/osint_forge.py
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Validate plugin contracts
+        run: ./bin/osint forge validate
+
+      - name: Smoke-test catalog
+        run: |
+          ./bin/osint --version
+          ./bin/osint forge list
+          ./bin/osint forge categories
+
+  shell:
+    name: Shell quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check executable modes
+        run: |
+          test -x bootstrap.sh
+          test -x bin/osint
+          test -x forge/osint_forge.py
+          test -z "$(find scripts plugins docs/plugin-template -type f \
+            -name '*.sh' ! -perm -u+x -print -quit)"
+
+      - name: Check shell syntax
+        run: bash -n bootstrap.sh bin/osint scripts/*.sh plugins/*/*.sh docs/plugin-template/*.sh
+
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: shellcheck -e SC1090,SC2034 bootstrap.sh bin/osint scripts/*.sh plugins/*/*.sh docs/plugin-template/*.sh
+
+  debian:
+    name: Debian smoke test
+    runs-on: ubuntu-latest
+    container: debian:stable-slim
+    steps:
+      - name: Install test dependencies
+        run: apt-get update && apt-get install -y git python3
+
+      - uses: actions/checkout@v4
+
+      - name: Exercise uninstalled framework
+        env:
+          OSINT_FORGE_ROOT: ${{ github.workspace }}
+          OSINT_FORGE_STATE: /tmp/osint-forge-state
+        run: |
+          ./bin/osint --version
+          ./bin/osint forge validate
+          ./bin/osint forge list
