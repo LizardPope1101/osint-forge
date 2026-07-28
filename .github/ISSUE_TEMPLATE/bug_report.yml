@@ -19,7 +19,7 @@ body:
     id: os
     attributes:
       label: Operating system
-      placeholder: "Debian 13, Ubuntu 26.04, etc."
+      placeholder: "Debian stable, Ubuntu 24.04, etc."
     validations:
       required: true
   - type: input

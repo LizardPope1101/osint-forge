@@ -14,6 +14,21 @@ for path in "$INSTALL_ROOT" "$BIN_DIR"; do
         exit 1
     fi
 done
-rm -f -- "$BIN_DIR/osint"
+marker="$INSTALL_ROOT/.osint-forge-install"
+if [[ -L "$INSTALL_ROOT" || ! -f "$marker" ]]; then
+    echo "Refusing to remove an unrecognized installation: $INSTALL_ROOT" >&2
+    exit 1
+fi
+expected_sha256="$(sed -n 's/^launcher_sha256=//p' "$marker")"
+launcher="$BIN_DIR/osint"
+if [[ -e "$launcher" || -L "$launcher" ]]; then
+    if [[ -L "$launcher" || ! -f "$launcher" \
+          || -z "$expected_sha256" \
+          || "$(sha256sum "$launcher" | cut -d' ' -f1)" != "$expected_sha256" ]]; then
+        echo "Refusing to remove an unrecognized launcher: $launcher" >&2
+        exit 1
+    fi
+    rm -f -- "$launcher"
+fi
 rm -rf -- "$INSTALL_ROOT"
 echo "Framework removed. Installed third-party tools and case data were left intact."

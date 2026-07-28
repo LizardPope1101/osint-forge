@@ -1,26 +1,14 @@
 # Releasing OSINT Forge
 
-1. Ensure `main` is green in GitHub Actions.
-2. Replace the development version in `forge/osint_forge.py` with the release
-   version.
-3. Move relevant entries from `CHANGELOG.md` under a dated version heading.
-4. Run:
+The authoritative release procedure is the numbered
+[Release Process](https://github.com/LizardPope1101/osint-forge/wiki/Release-Process)
+in the project wiki. Complete every numbered step in order. Each step is a
+gate: verify it before beginning the next step. Do not skip, combine, reorder,
+or treat a pending check as complete.
 
-   ```bash
-   ./scripts/dev-check.sh
-   ```
-
-5. Confirm the Python 3.10–3.13, ShellCheck, and Debian integration jobs pass.
-6. Test `bootstrap.sh` on clean Debian and Ubuntu virtual machines.
-7. Commit the release preparation as `Prepare vX.Y.Z`.
-8. Create an annotated tag:
-
-   ```bash
-   git tag -a vX.Y.Z -m "OSINT Forge vX.Y.Z"
-   git push origin main vX.Y.Z
-   ```
-
-9. Create a GitHub release from the tag with the matching changelog section.
+If that wiki page is revised, its newest published process governs subsequent
+releases. This file intentionally does not duplicate the checklist, which
+prevents two release procedures from drifting apart.
 
 Do not publish a release containing target data, reports, credentials, cookies,
 tokens, local state, or investigation artifacts.

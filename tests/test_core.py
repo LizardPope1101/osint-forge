@@ -166,6 +166,16 @@ class TargetTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 osint_forge.parse_batch_file(target_file)
 
+    def test_batch_parser_reports_missing_and_non_utf8_input(self):
+        with tempfile.TemporaryDirectory() as temp:
+            missing = Path(temp) / "missing.txt"
+            with self.assertRaisesRegex(SystemExit, "does not exist"):
+                osint_forge.parse_batch_file(missing)
+            invalid = Path(temp) / "invalid.txt"
+            invalid.write_bytes(b"\xff")
+            with self.assertRaisesRegex(SystemExit, "not valid UTF-8"):
+                osint_forge.parse_batch_file(invalid)
+
     def test_safe_slug_is_stable_and_separates_values(self):
         first = osint_forge.safe_slug("Example Target")
         self.assertEqual(first, osint_forge.safe_slug("Example Target"))
@@ -238,6 +248,17 @@ class ExecutionTests(unittest.TestCase):
             for filename in ("stdout.log", "stderr.log", "status.json"):
                 self.assertEqual(((output / filename).stat().st_mode & 0o777), 0o600)
 
+    @unittest.skipUnless(hasattr(os, "O_NOFOLLOW"), "requires O_NOFOLLOW")
+    def test_private_log_refuses_symbolic_link(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            victim = root / "victim"
+            victim.write_text("preserve", encoding="utf-8")
+            (root / "stdout.log").symlink_to(victim)
+            with self.assertRaises(OSError):
+                osint_forge.open_private_log(root / "stdout.log")
+            self.assertEqual(victim.read_text(encoding="utf-8"), "preserve")
+
     def test_batch_run_directories_do_not_collide(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -299,6 +320,24 @@ class ExecutionTests(unittest.TestCase):
                 0o600,
             )
 
+    def test_batch_without_matching_jobs_leaves_no_run_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            targets = root / "targets.txt"
+            targets.write_text("[Usernames]\nexample_handle\n", encoding="utf-8")
+            output_root = root / "output"
+            args = argparse.Namespace(
+                input=targets,
+                output_root=output_root,
+                name="no-match",
+                plugins=[],
+                jobs=1,
+                dry_run=False,
+            )
+            with mock.patch.object(osint_forge, "is_installed", return_value=False):
+                self.assertEqual(osint_forge.cmd_batch(args), 1)
+            self.assertFalse(output_root.exists())
+
     def test_lifecycle_start_failure_returns_command_not_found(self):
         with tempfile.TemporaryDirectory() as temp:
             plugin_dir = Path(temp)
@@ -329,6 +368,42 @@ class ExecutionTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"HOME": str(home), "PATH": "/usr/bin"}), \
                  mock.patch.object(Path, "home", return_value=home):
                 self.assertTrue(osint_forge.command_exists(command.name))
+
+    def test_stale_install_record_does_not_claim_missing_tool_is_installed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "OSINT_FORGE_STATE": str(Path(temp) / "state"),
+                    "PATH": str(Path(temp) / "empty-bin"),
+                },
+            ):
+                osint_forge.save_record(
+                    "maigret",
+                    osint_forge.catalog()["maigret"][1],
+                    "install",
+                )
+                self.assertFalse(osint_forge.is_installed("maigret"))
+
+    def test_adapter_refuses_symbolic_link_output_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            outside = root / "outside"
+            outside.mkdir()
+            output = root / "output"
+            output.symlink_to(outside, target_is_directory=True)
+            with mock.patch.object(osint_forge, "require_plugin") as require:
+                require.return_value = (
+                    root,
+                    {
+                        "id": "example",
+                        "adapters": {"username": {"command": ["example", "{target}"]}},
+                    },
+                )
+                with self.assertRaisesRegex(RuntimeError, "symbolic-link"):
+                    osint_forge.run_adapter(
+                        "example", "username", "alice", output, True
+                    )
 
 
 class CliTests(unittest.TestCase):
@@ -517,6 +592,51 @@ class CaseManagementTests(unittest.TestCase):
                 (malformed / "case.json").write_text("{", encoding="utf-8")
                 with self.assertRaisesRegex(SystemExit, "invalid case.json"):
                     osint_forge.load_case("malformed")
+
+    def test_case_rejects_malformed_target_and_job_records(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            case = self.create_case(root)
+            metadata_path = case / "case.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata["targets"] = [{"id": "wrong", "type": "username"}]
+            osint_forge.write_private_json(metadata_path, metadata)
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+                with self.assertRaisesRegex(SystemExit, "invalid target record"):
+                    osint_forge.load_case("case-001")
+
+            metadata["targets"] = []
+            metadata["jobs"] = {"job": {"status": "failed", "exit_code": "1"}}
+            osint_forge.write_private_json(metadata_path, metadata)
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+                with self.assertRaisesRegex(SystemExit, "invalid job exit code"):
+                    osint_forge.load_case("case-001")
+
+    def test_nested_case_directory_symbolic_link_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            case = root / "case"
+            case.mkdir()
+            outside = root / "outside"
+            outside.mkdir()
+            (case / "raw").symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(RuntimeError, "symbolic-link"):
+                osint_forge.secure_case_directory(
+                    case / "raw" / "username",
+                    case,
+                )
+
+    @unittest.skipUnless(hasattr(os, "O_NOFOLLOW"), "requires O_NOFOLLOW")
+    def test_case_activity_refuses_symbolic_link(self):
+        with tempfile.TemporaryDirectory() as temp:
+            case = Path(temp) / "case"
+            case.mkdir()
+            victim = Path(temp) / "victim"
+            victim.write_text("preserve", encoding="utf-8")
+            (case / "activity.jsonl").symlink_to(victim)
+            with self.assertRaises(OSError):
+                osint_forge.append_case_activity(case, "test")
+            self.assertEqual(victim.read_text(encoding="utf-8"), "preserve")
 
     def test_empty_case_and_unknown_plugin_cannot_start_run(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -739,6 +859,22 @@ class CaseManagementTests(unittest.TestCase):
             self.assertIn("[preserved output](../runs/", content)
             self.assertEqual((report.stat().st_mode & 0o777), 0o600)
 
+    def test_case_report_escapes_markdown_control_characters(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            case = self.create_case(root)
+            metadata_path = case / "case.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata["purpose"] = "line one\n# injected"
+            osint_forge.write_private_json(metadata_path, metadata)
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+                osint_forge.cmd_case_report(
+                    argparse.Namespace(case="case-001", output=None, force=False)
+                )
+            report = (case / "report.md").read_text(encoding="utf-8")
+            self.assertIn("line one # injected", report)
+            self.assertNotIn("\n# injected", report)
+
     def test_legacy_case_migrates_and_future_schema_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "cases"
@@ -841,6 +977,7 @@ class ShellScriptTests(unittest.TestCase):
                 [str(install_script)], env=env, text=True, capture_output=True, check=False
             )
             self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertTrue((install_root / ".osint-forge-install").is_file())
             self.assertTrue((install_root / "forge" / "osint_forge.py").is_file())
             self.assertTrue((bin_dir / "osint").is_file())
             config = target_home / ".config" / "osint-forge" / "targets.txt"
@@ -900,6 +1037,47 @@ class ShellScriptTests(unittest.TestCase):
             self.assertFalse((bin_dir / "osint").exists())
             self.assertTrue(config.is_file())
             self.assertTrue((cases / "installed-case" / "case.json").is_file())
+
+    @unittest.skipUnless(os.geteuid() == 0, "isolated framework install requires root")
+    def test_uninstall_refuses_unrecognized_paths_and_launchers(self):
+        root = osint_forge.SOURCE_ROOT
+        with tempfile.TemporaryDirectory() as temp:
+            sandbox = Path(temp)
+            install_root = sandbox / "share" / "osint-forge"
+            bin_dir = sandbox / "bin"
+            target_home = sandbox / "home"
+            target_home.mkdir()
+            env = {
+                **os.environ,
+                "OSINT_FORGE_INSTALL_ROOT": str(install_root),
+                "OSINT_FORGE_BIN_DIR": str(bin_dir),
+                "OSINT_FORGE_ETC_ROOT": str(sandbox / "etc" / "osint-forge"),
+                "OSINT_FORGE_TARGET_HOME": str(target_home),
+            }
+            uninstall_script = root / "scripts" / "uninstall-framework.sh"
+            install_root.mkdir(parents=True)
+            unrecognized = subprocess.run(
+                [str(uninstall_script)], env=env, text=True,
+                capture_output=True, check=False,
+            )
+            self.assertNotEqual(unrecognized.returncode, 0)
+            self.assertTrue(install_root.is_dir())
+
+            shutil.rmtree(install_root)
+            installed = subprocess.run(
+                [str(root / "scripts" / "install-framework.sh")],
+                env=env, text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(installed.returncode, 0, installed.stderr)
+            launcher = bin_dir / "osint"
+            launcher.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            refused = subprocess.run(
+                [str(uninstall_script)], env=env, text=True,
+                capture_output=True, check=False,
+            )
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertTrue(install_root.is_dir())
+            self.assertTrue(launcher.is_file())
 
 
 if __name__ == "__main__":
