@@ -1,77 +1,39 @@
 # OSINT Forge
 
-OSINT Forge is a modular tool manager and workflow layer for a minimal Debian-based research workstation.
+OSINT Forge is a modular tool manager and workflow layer for a minimal
+Debian-based OSINT workstation.
 
-The framework itself does not hardcode how Maigret, Nmap, Recon-ng, or any other program is installed. Every tool is a self-contained plugin with:
+Use it only for lawful research. Network scanning must be limited to systems
+you own or are explicitly authorized to assess.
 
-```text
-plugins/<tool>/
-├── manifest.json
-├── install.sh
-├── update.sh
-├── remove.sh
-└── doctor.sh
-```
-
-The manifest declares:
-
-- category and searchable tags
-- installed commands
-- supported target types
-- whether it can participate in batch jobs
-- lifecycle scripts
-- target adapters
-
-## Install the framework
+## Fresh Debian/Ubuntu installation
 
 ```bash
-unzip osint-forge.zip
+git clone https://github.com/LizardPope1101/osint-forge.git
 cd osint-forge
-sudo ./scripts/install-framework.sh
+chmod +x bootstrap.sh
+./bootstrap.sh
 ```
 
-## Browse the catalog
+The bootstrap installs the base dependencies (`python3`, `python3-venv`,
+`python3-pip`, `pipx`, `git`, `sudo`, and `ca-certificates`) and installs the
+framework. Individual OSINT tools remain opt-in.
 
 ```bash
 osint forge list
 osint forge categories
-osint forge search username
-osint forge info maigret
+osint forge doctor
 ```
 
-## Install tools
-
-One tool:
+## Install and maintain tools
 
 ```bash
 osint forge install maigret
-```
-
-Several tools:
-
-```bash
 osint forge install maigret sherlock ghunt
-```
-
-An entire category:
-
-```bash
 osint forge install usernames
-osint forge install infrastructure
-```
-
-Preview without changing the system:
-
-```bash
 osint forge install infrastructure --dry-run
-```
 
-## Maintain tools
-
-```bash
 osint forge update maigret
-osint forge update usernames
-osint forge update infrastructure
 osint forge doctor
 osint forge remove recon-ng
 ```
@@ -83,21 +45,9 @@ osint run maigret username example_handle -o ~/OSINT-Cases/example/maigret
 osint run exiftool image photograph.jpg -o ~/OSINT-Cases/example/metadata
 ```
 
-Nmap adapters use a restrained top-100-port service scan, but should only be used against infrastructure you own or are explicitly authorized to assess:
+## Batch processing
 
-```bash
-osint run nmap domain example.org -o ~/Authorized-Assessments/example
-```
-
-## Dynamic batch processing
-
-Edit:
-
-```text
-~/.config/osint-forge/targets.txt
-```
-
-Example:
+Edit `~/.config/osint-forge/targets.txt`:
 
 ```ini
 [Emails]
@@ -113,37 +63,33 @@ example.com
 ./photograph.jpg
 ```
 
-Run every installed plugin that advertises batch support for those target types:
+Then run:
 
 ```bash
 osint batch --name initial-sweep
-```
-
-Restrict the participating plugins:
-
-```bash
 osint batch --plugins maigret sherlock --name usernames-only
 ```
 
-The batch engine does not contain a list of tools. It discovers compatible installed plugins from their manifests. Installing a new batch-capable plugin automatically makes it available to the batch engine.
+The batch engine discovers compatible installed plugins from their manifests.
+Results default to `~/OSINT-Cases/Batch-Runs/`. Framework state is stored
+consistently in `~/.local/state/osint-forge/`.
 
-## Adding a plugin
+## Modular plugin system
 
-Copy the example:
+Every tool is a self-contained plugin:
 
-```bash
-cp -a docs/plugin-template plugins/new-tool
+```text
+plugins/<tool>/
+├── manifest.json
+├── install.sh
+├── update.sh
+├── remove.sh
+└── doctor.sh
 ```
 
-Then edit `manifest.json` and the four lifecycle scripts. No change to `osint_forge.py` is needed.
+The manifest declares categories, commands, supported target types, lifecycle
+scripts, root requirements, and target adapters. Adapter commands are argument
+arrays rather than interpolated shell strings.
 
-Validate locally without installing the framework:
-
-```bash
-export OSINT_FORGE_ROOT="$PWD"
-export OSINT_FORGE_STATE="$PWD/.test-state"
-./bin/osint forge list
-./bin/osint forge install new-tool --dry-run
-```
-
-See `docs/PLUGIN-API.md` for the plugin contract.
+Copy `docs/plugin-template` to start a new plugin. See
+[`docs/PLUGIN-API.md`](docs/PLUGIN-API.md) for the full contract.
