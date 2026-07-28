@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Reject lifecycle scripts that escape their plugin directory.
+- Validate plugin identifiers, versions, tags, and complete batch adapter coverage.
+- Refuse to load malformed plugin contracts during normal catalog operations.
+- Record adapter launch failures instead of crashing without a status report.
+- Return clean lifecycle errors when a script cannot be started.
+- Prevent simultaneous batch runs from colliding on the same output directory.
+- Reject unknown batch plugin filters and conflicting catalog status filters.
+- Make dry-run lifecycle previews work before optional dependencies are installed.
+- Make plugin doctor checks fail when an installed command's self-check fails.
+- Discover and execute pipx-installed tools from the standard per-user binary directory.
+- Replace framework files through a staged upgrade so obsolete files cannot survive updates.
+- Validate framework installation paths and preserve configuration during tested uninstall cycles.
+- Add consistent SPDX ownership and license identifiers to every lifecycle script.
+- Create framework state, copied target lists, logs, and result summaries with
+  owner-only permissions.
+
+### Changed
+
+- Expand CI coverage across Python 3.10 through 3.13 and run integration tests
+  inside the Debian container.
+- Pin GitHub Actions to immutable commit SHAs while retaining Dependabot updates.
+
 All notable changes to OSINT Forge will be documented here.
 
 The project follows [Semantic Versioning](https://semver.org/). Until the first

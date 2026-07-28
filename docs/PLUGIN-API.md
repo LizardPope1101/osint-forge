@@ -11,7 +11,8 @@ plugins/example/
 └── doctor.sh
 ```
 
-The plugin directory name and `manifest.json` `id` must match.
+The plugin directory name and `manifest.json` `id` must match. IDs use
+lowercase letters, numbers, and single hyphens between components.
 
 ## Manifest
 
@@ -73,6 +74,9 @@ Core target types are:
 - `{plugin_dir}`: the plugin directory
 
 Adapters are argument arrays, not shell strings. This prevents shell interpolation of untrusted target values.
+Every target listed in `supports` must have an adapter when `batch` is `true`.
+Lifecycle script paths must be relative files contained within the plugin
+directory.
 
 ## Lifecycle environment
 
@@ -98,4 +102,6 @@ The helper provides:
 - `say`
 - `as_target_user`
 
-Every system-changing command should be wrapped with `run` so dry-run mode remains accurate.
+Every system-changing command should be wrapped with `run` so dry-run mode
+remains accurate. Use `need` for dependencies; in dry-run mode it reports a
+requirement without failing the preview.

@@ -18,13 +18,18 @@ run() {
     fi
 }
 need() {
-    command -v "$1" >/dev/null 2>&1 || {
-        say "Missing dependency: $1"
-        return 1
-    }
+    if command -v "$1" >/dev/null 2>&1; then
+        return 0
+    fi
+    if [[ "$dry_run" == "1" ]]; then
+        say "DRY-RUN: dependency required: $1"
+        return 0
+    fi
+    say "Missing dependency: $1"
+    return 1
 }
 as_target_user() {
-    local target="${SUDO_USER:-$USER}"
+    local target="${SUDO_USER:-${USER:-$(id -un)}}"
     if [[ "$(id -u)" -eq 0 && "$target" != "root" ]]; then
         run sudo -H -u "$target" "$@"
     else

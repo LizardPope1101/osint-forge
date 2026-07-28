@@ -4,22 +4,56 @@
 set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-TARGET_USER="${SUDO_USER:-$USER}"
-TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+TARGET_USER="${SUDO_USER:-${USER:-$(id -un)}}"
+TARGET_HOME="${OSINT_FORGE_TARGET_HOME:-$(getent passwd "$TARGET_USER" | cut -d: -f6)}"
+INSTALL_ROOT="${OSINT_FORGE_INSTALL_ROOT:-/usr/local/share/osint-forge}"
+BIN_DIR="${OSINT_FORGE_BIN_DIR:-/usr/local/bin}"
+ETC_ROOT="${OSINT_FORGE_ETC_ROOT:-/etc/osint-forge}"
 
 if [[ $EUID -ne 0 ]]; then
     echo "Run with sudo: sudo ./scripts/install-framework.sh" >&2
     exit 1
 fi
 
-install -d -m 0755 /usr/local/share/osint-forge
-cp -a "$ROOT/forge" "$ROOT/plugins" "$ROOT/scripts" /usr/local/share/osint-forge/
-find /usr/local/share/osint-forge -type d -exec chmod 0755 {} +
-find /usr/local/share/osint-forge -type f -name '*.sh' -exec chmod 0755 {} +
-chmod 0755 /usr/local/share/osint-forge/forge/osint_forge.py
+for path in "$TARGET_HOME" "$INSTALL_ROOT" "$BIN_DIR" "$ETC_ROOT"; do
+    if [[ "$path" != /* || "$path" == "/" ]]; then
+        echo "Refusing unsafe installation path: $path" >&2
+        exit 1
+    fi
+done
+if [[ -z "$TARGET_HOME" || ! -d "$TARGET_HOME" ]]; then
+    echo "Could not determine a valid home directory for $TARGET_USER." >&2
+    exit 1
+fi
 
-install -m 0755 "$ROOT/bin/osint" /usr/local/bin/osint
-install -d -m 0755 /etc/osint-forge
+install -d -m 0755 "$(dirname -- "$INSTALL_ROOT")" "$BIN_DIR" "$ETC_ROOT"
+staging="$(mktemp -d "${INSTALL_ROOT}.new.XXXXXX")"
+backup="${INSTALL_ROOT}.old.$$"
+cleanup() {
+    rm -rf -- "$staging"
+}
+trap cleanup EXIT
+
+cp -a "$ROOT/forge" "$ROOT/plugins" "$ROOT/scripts" "$staging/"
+find "$staging" -type d -exec chmod 0755 {} +
+find "$staging" -type f -name '*.sh' -exec chmod 0755 {} +
+chmod 0755 "$staging/forge/osint_forge.py"
+
+if [[ -e "$INSTALL_ROOT" || -L "$INSTALL_ROOT" ]]; then
+    mv -- "$INSTALL_ROOT" "$backup"
+fi
+if ! mv -- "$staging" "$INSTALL_ROOT"; then
+    if [[ -e "$backup" || -L "$backup" ]]; then
+        mv -- "$backup" "$INSTALL_ROOT"
+    fi
+    exit 1
+fi
+if [[ -e "$backup" || -L "$backup" ]]; then
+    rm -rf -- "$backup"
+fi
+trap - EXIT
+
+install -m 0755 "$ROOT/bin/osint" "$BIN_DIR/osint"
 
 user_config="$TARGET_HOME/.config/osint-forge"
 install -d -o "$TARGET_USER" -g "$TARGET_USER" -m 0700 "$user_config"

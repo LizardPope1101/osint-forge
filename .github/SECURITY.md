@@ -106,3 +106,7 @@ Users should:
 - Use restrained concurrency and network-scan defaults.
 - Keep the framework and all independently installed tools updated.
 - Never commit targets, reports, credentials, or case data.
+
+OSINT Forge creates its own state and result artifacts with owner-only
+permissions. Users remain responsible for permissions on parent directories,
+backups, exported reports, and files created independently by upstream tools.

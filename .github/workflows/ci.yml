@@ -11,14 +11,19 @@ permissions:
 
 jobs:
   test:
-    name: Python and plugin contracts
+    name: Python ${{ matrix.python-version }} and plugin contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
 
       - name: Compile Python
         run: python -m py_compile forge/osint_forge.py
@@ -38,8 +43,9 @@ jobs:
   shell:
     name: Shell quality
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Check executable modes
         run: |
@@ -61,12 +67,13 @@ jobs:
   debian:
     name: Debian smoke test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     container: debian:stable-slim
     steps:
       - name: Install test dependencies
         run: apt-get update && apt-get install -y git python3
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Exercise uninstalled framework
         env:
@@ -76,3 +83,9 @@ jobs:
           ./bin/osint --version
           ./bin/osint forge validate
           ./bin/osint forge list
+
+      - name: Exercise isolated install and batch integration tests
+        env:
+          OSINT_FORGE_ROOT: ${{ github.workspace }}
+          OSINT_FORGE_STATE: /tmp/osint-forge-state
+        run: python3 -m unittest discover -s tests -v

@@ -56,6 +56,37 @@ def now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
 
+def write_private_json(path: Path, data: dict[str, Any]) -> None:
+    """Atomically write JSON that may contain targets or execution metadata."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.parent.chmod(0o700)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    descriptor = os.open(
+        temporary,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+        0o600,
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2)
+            handle.write("\n")
+        temporary.replace(path)
+        path.chmod(0o600)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def open_private_log(path: Path):
+    descriptor = os.open(
+        path,
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+        0o600,
+    )
+    os.fchmod(descriptor, 0o600)
+    return os.fdopen(descriptor, "w", encoding="utf-8")
+
+
 def load_manifest(plugin_dir: Path) -> dict[str, Any]:
     path = plugin_dir / "manifest.json"
     try:
@@ -65,13 +96,30 @@ def load_manifest(plugin_dir: Path) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"Invalid JSON in {path}: {exc}") from exc
 
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{path}: manifest root must be an object")
     required = {"schema", "id", "name", "description", "category", "lifecycle", "commands", "supports"}
     missing = sorted(required - set(data))
     if missing:
         raise RuntimeError(f"{path}: missing fields: {', '.join(missing)}")
     if data["id"] != plugin_dir.name:
         raise RuntimeError(f"{path}: id must match directory name")
+    errors, _ = validate_plugin_directory(plugin_dir)
+    if errors:
+        raise RuntimeError(f"{path}: invalid plugin contract: {'; '.join(errors)}")
     return data
+
+
+def resolve_plugin_file(plugin_dir: Path, relative_path: str) -> Path:
+    """Resolve a plugin-owned file and reject absolute paths or traversal."""
+    relative = Path(relative_path)
+    if relative.is_absolute():
+        raise ValueError("path must be relative")
+    root = plugin_dir.resolve()
+    candidate = (root / relative).resolve()
+    if not candidate.is_relative_to(root):
+        raise ValueError("path escapes the plugin directory")
+    return candidate
 
 
 def catalog() -> dict[str, tuple[Path, dict[str, Any]]]:
@@ -114,6 +162,10 @@ def validate_plugin_directory(plugin_dir: Path) -> tuple[list[str], list[str]]:
         )
     if manifest.get("schema") != 1:
         errors.append(f"{plugin_dir.name}: unsupported schema {manifest.get('schema')!r}")
+    if not isinstance(manifest.get("plugin_version"), str) or not manifest.get("plugin_version"):
+        errors.append(f"{plugin_dir.name}: plugin_version must be a non-empty string")
+    if not isinstance(plugin_id, str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", plugin_id):
+        errors.append(f"{plugin_dir.name}: id must use lowercase letters, numbers, and hyphens")
 
     for field in ("name", "description", "category", "homepage",
                   "upstream_license", "upstream_license_url"):
@@ -125,6 +177,12 @@ def validate_plugin_directory(plugin_dir: Path) -> tuple[list[str], list[str]]:
         isinstance(item, str) and item for item in commands
     ):
         errors.append(f"{plugin_dir.name}: commands must be a non-empty string array")
+
+    tags = manifest.get("tags", [])
+    if not isinstance(tags, list) or not all(
+        isinstance(item, str) and item for item in tags
+    ):
+        errors.append(f"{plugin_dir.name}: tags must be a string array")
 
     supports = manifest.get("supports")
     if not isinstance(supports, list) or not all(isinstance(item, str) for item in supports):
@@ -152,11 +210,15 @@ def validate_plugin_directory(plugin_dir: Path) -> tuple[list[str], list[str]]:
         if not isinstance(rel, str) or not rel:
             errors.append(f"{plugin_dir.name}: lifecycle.{action} must name a script")
         else:
-            script = plugin_dir / rel
-            if not script.is_file():
-                errors.append(f"{plugin_dir.name}: missing lifecycle script {rel}")
-            elif not os.access(script, os.X_OK):
-                errors.append(f"{plugin_dir.name}: lifecycle script is not executable: {rel}")
+            try:
+                script = resolve_plugin_file(plugin_dir, rel)
+            except ValueError as exc:
+                errors.append(f"{plugin_dir.name}: invalid lifecycle script {rel!r}: {exc}")
+            else:
+                if not script.is_file():
+                    errors.append(f"{plugin_dir.name}: missing lifecycle script {rel}")
+                elif not os.access(script, os.X_OK):
+                    errors.append(f"{plugin_dir.name}: lifecycle script is not executable: {rel}")
         if action not in root_map or not isinstance(root_map.get(action), bool):
             errors.append(f"{plugin_dir.name}: requires_root.{action} must be boolean")
 
@@ -193,6 +255,13 @@ def validate_plugin_directory(plugin_dir: Path) -> tuple[list[str], list[str]]:
 
     if manifest.get("batch") and not adapters:
         errors.append(f"{plugin_dir.name}: batch plugin must define at least one adapter")
+    if manifest.get("batch"):
+        missing_adapters = sorted(set(supports) - set(adapters))
+        if missing_adapters:
+            errors.append(
+                f"{plugin_dir.name}: batch plugin is missing adapters for: "
+                + ", ".join(missing_adapters)
+            )
     return errors, warnings
 
 
@@ -208,6 +277,19 @@ def installed_record(plugin_id: str) -> dict[str, Any] | None:
         return None
 
 
+def command_search_path() -> str:
+    """Return PATH plus the standard per-user location used by pipx."""
+    entries = os.environ.get("PATH", "").split(os.pathsep)
+    user_bin = str(Path.home() / ".local/bin")
+    if user_bin not in entries:
+        entries.append(user_bin)
+    return os.pathsep.join(entry for entry in entries if entry)
+
+
+def command_exists(command: str) -> bool:
+    return shutil.which(command, path=command_search_path()) is not None
+
+
 def is_installed(plugin_id: str) -> bool:
     rec = installed_record(plugin_id)
     if rec is not None:
@@ -216,7 +298,7 @@ def is_installed(plugin_id: str) -> bool:
     if not entry:
         return False
     _, manifest = entry
-    return bool(manifest["commands"]) and all(shutil.which(c) for c in manifest["commands"])
+    return bool(manifest["commands"]) and all(command_exists(c) for c in manifest["commands"])
 
 
 def save_record(plugin_id: str, manifest: dict[str, Any], action: str) -> None:
@@ -231,9 +313,7 @@ def save_record(plugin_id: str, manifest: dict[str, Any], action: str) -> None:
         "last_action": action,
         "manifest_version": manifest.get("plugin_version", "1"),
     }
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    tmp.replace(path)
+    write_private_json(path, data)
 
 
 def remove_record(plugin_id: str) -> None:
@@ -251,9 +331,14 @@ def lifecycle_script(plugin_dir: Path, manifest: dict[str, Any], action: str) ->
     rel = manifest["lifecycle"].get(action)
     if not rel:
         raise SystemExit(f"{manifest['id']} does not define '{action}'.")
-    path = plugin_dir / rel
-    if not path.exists():
+    try:
+        path = resolve_plugin_file(plugin_dir, rel)
+    except ValueError as exc:
+        raise SystemExit(f"Invalid lifecycle script for {manifest['id']}: {exc}") from exc
+    if not path.is_file():
         raise SystemExit(f"Missing lifecycle script: {path}")
+    if not os.access(path, os.X_OK):
+        raise SystemExit(f"Lifecycle script is not executable: {path}")
     return path
 
 
@@ -285,7 +370,11 @@ def run_lifecycle(
         cmd[1:1] = ["--preserve-env=OSINT_FORGE_PLUGIN_ID,OSINT_FORGE_PLUGIN_DIR,OSINT_FORGE_ROOT,OSINT_FORGE_STATE,OSINT_FORGE_DRY_RUN,OSINT_FORGE_ASSUME_YES"]
 
     print(f"{action.upper():8} {plugin_id}: {shlex.join(cmd)}")
-    completed = subprocess.run(cmd, env=env, check=False)
+    try:
+        completed = subprocess.run(cmd, env=env, check=False)
+    except OSError as exc:
+        print(f"ERROR    {plugin_id}: could not start {action}: {exc}", file=sys.stderr)
+        return 127 if isinstance(exc, FileNotFoundError) else 126
     if completed.returncode == 0 and not dry_run:
         if action in {"install", "update"}:
             save_record(plugin_id, manifest, action)
@@ -352,7 +441,7 @@ def cmd_search(args: argparse.Namespace) -> int:
     if not matches:
         print("No matching plugins.")
         return 1
-    return cmd_list(argparse.Namespace(installed=False, available=False, json=False, _selection=matches)) if False else _print_ids(matches)
+    return _print_ids(matches)
 
 
 def _print_ids(ids: list[str]) -> int:
@@ -466,25 +555,43 @@ def run_adapter(plugin_id: str, target_type: str, value: str, output_dir: Path, 
     if not is_installed(plugin_id) and not dry_run:
         print(f"MISS     {plugin_id}: not installed", file=sys.stderr)
         return 127
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    output_dir.chmod(0o700)
     cmd = adapter_command(plugin_dir, manifest, target_type, value, output_dir)
     if dry_run:
         print(f"DRY      {plugin_id}: {shlex.join(cmd)}")
         return 0
     print(f"RUN      {plugin_id}: {target_type}={value}")
-    with (output_dir / "stdout.log").open("w", encoding="utf-8") as out, \
-         (output_dir / "stderr.log").open("w", encoding="utf-8") as err:
-        completed = subprocess.run(cmd, cwd=output_dir, stdout=out, stderr=err, check=False)
+    error = None
+    with open_private_log(output_dir / "stdout.log") as out, \
+         open_private_log(output_dir / "stderr.log") as err:
+        try:
+            env = {**os.environ, "PATH": command_search_path()}
+            completed = subprocess.run(
+                cmd,
+                cwd=output_dir,
+                stdout=out,
+                stderr=err,
+                env=env,
+                check=False,
+            )
+            exit_code = completed.returncode
+        except OSError as exc:
+            error = str(exc)
+            exit_code = 127 if isinstance(exc, FileNotFoundError) else 126
+            print(f"ERROR: could not start command: {exc}", file=err)
     status = {
         "plugin": plugin_id,
         "target_type": target_type,
         "target": value,
         "command": cmd,
-        "exit_code": completed.returncode,
+        "exit_code": exit_code,
         "completed_at": now(),
     }
-    (output_dir / "status.json").write_text(json.dumps(status, indent=2) + "\n", encoding="utf-8")
-    return completed.returncode
+    if error is not None:
+        status["error"] = error
+    write_private_json(output_dir / "status.json", status)
+    return exit_code
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -538,15 +645,34 @@ def safe_slug(value: str) -> str:
     return f"{clean}--{digest}"
 
 
+def create_run_directory(output_root: Path, name: str, stamp: str | None = None) -> Path:
+    """Create a unique batch directory, even for runs started simultaneously."""
+    output_root.mkdir(parents=True, exist_ok=True)
+    timestamp = stamp or dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    label = safe_slug(name).rsplit("--", 1)[0]
+    base = output_root / f"{timestamp}-{label}"
+    for attempt in range(1000):
+        candidate = base if attempt == 0 else output_root / f"{base.name}-{attempt}"
+        try:
+            candidate.mkdir(mode=0o700)
+            return candidate
+        except FileExistsError:
+            continue
+    raise RuntimeError(f"Could not allocate a unique batch directory under {output_root}")
+
+
 def cmd_batch(args: argparse.Namespace) -> int:
     source = args.input.expanduser().resolve()
     targets = parse_batch_file(source)
-    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_dir = args.output_root.expanduser().resolve() / f"{stamp}-{safe_slug(args.name).rsplit('--',1)[0]}"
-    run_dir.mkdir(parents=True)
-    shutil.copy2(source, run_dir / "targets-input.txt")
-
     cat = catalog()
+    unknown_plugins = sorted(set(args.plugins) - set(cat))
+    if unknown_plugins:
+        raise SystemExit(f"Unknown batch plugin(s): {', '.join(unknown_plugins)}")
+    run_dir = create_run_directory(args.output_root.expanduser().resolve(), args.name)
+    copied_input = run_dir / "targets-input.txt"
+    shutil.copy2(source, copied_input)
+    copied_input.chmod(0o600)
+
     jobs = []
     for target_type, value in targets:
         for pid, (_, manifest) in cat.items():
@@ -585,7 +711,7 @@ def cmd_batch(args: argparse.Namespace) -> int:
             for p, t, v, rc in results
         ],
     }
-    (run_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    write_private_json(run_dir / "summary.json", summary)
     failures = sum(rc != 0 for *_, rc in results)
     print(f"Completed with {failures} failed job(s).")
     return 1 if failures else 0
@@ -650,8 +776,9 @@ def build_parser() -> argparse.ArgumentParser:
     fs = forge.add_subparsers(dest="forge_command", required=True)
 
     p = fs.add_parser("list")
-    p.add_argument("--installed", action="store_true")
-    p.add_argument("--available", action="store_true")
+    status_filter = p.add_mutually_exclusive_group()
+    status_filter.add_argument("--installed", action="store_true")
+    status_filter.add_argument("--available", action="store_true")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_list)
 
@@ -708,7 +835,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    return int(args.func(args))
+    try:
+        return int(args.func(args))
+    except (OSError, RuntimeError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
