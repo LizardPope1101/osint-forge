@@ -2,15 +2,21 @@
 
 ## Supported versions
 
-OSINT Forge is currently in alpha development. Security fixes are applied to
-the latest version on the `main` branch. Older commits, forks, archived
-releases, and locally modified installations are not separately supported.
+OSINT Forge is currently in pre-1.0 development. Security fixes are applied to
+the latest stable release and the active `main` branch when applicable. Older
+releases, commits, forks, archived releases, and locally modified installations
+are not separately supported.
 
 | Version | Supported |
 |---|---|
-| Latest `main` | Yes |
-| Older commits or releases | No |
+| Latest stable release | Yes |
+| Active `main` branch | Yes, development |
+| Older releases or commits | No |
 | Third-party OSINT tools | By their upstream maintainers |
+
+Users performing real authorized work should use the latest stable release.
+The `main` branch may contain unreleased changes and is intended for
+development and testing.
 
 ## Reporting a vulnerability
 
@@ -51,6 +57,8 @@ Security issues in scope include:
 - Path traversal or arbitrary file writes
 - Insecure handling of credentials, cookies, tokens, or configuration
 - Sensitive data exposure through logs, state files, or reports
+- Loss or corruption of case data, provenance, activity history, or raw output
+- Unsafe case import, export, report, redaction, or integrity behavior
 - Manifest validation bypasses
 - Unsafe plugin discovery or loading
 - Dependency or installer behavior introduced by OSINT Forge
@@ -103,6 +111,8 @@ Users should:
 - Keep API keys, cookies, and tokens outside the repository and target files.
 - Protect `~/.local/state/osint-forge/` and case-output directories.
 - Preserve raw evidence separately from interpretation.
+- Verify the destination and redaction level before sharing any case export or
+  report.
 - Use restrained concurrency and network-scan defaults.
 - Keep the framework and all independently installed tools updated.
 - Never commit targets, reports, credentials, or case data.
