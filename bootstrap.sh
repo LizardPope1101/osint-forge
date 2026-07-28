@@ -25,5 +25,9 @@ fi
   python3-venv \
   sudo
 
-python3 "$(dirname "$0")/install.py"
-
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ ${EUID} -eq 0 ]]; then
+  "$ROOT/scripts/install-framework.sh"
+else
+  sudo "$ROOT/scripts/install-framework.sh"
+fi
