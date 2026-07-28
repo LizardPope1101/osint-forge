@@ -64,28 +64,67 @@ jobs:
       - name: Run ShellCheck
         run: shellcheck -e SC1090,SC2034 bootstrap.sh bin/osint scripts/*.sh plugins/*/*.sh docs/plugin-template/*.sh
 
-  debian:
-    name: Debian smoke test
+  clean-install:
+    name: Clean install (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    container: debian:stable-slim
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian stable
+            image: debian:stable-slim
+          - name: Ubuntu 24.04
+            image: ubuntu:24.04
+    container: ${{ matrix.image }}
     steps:
-      - name: Install test dependencies
-        run: apt-get update && apt-get install -y git python3
+      - name: Install checkout dependencies
+        run: apt-get update && apt-get install -y ca-certificates git
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Exercise uninstalled framework
-        env:
-          OSINT_FORGE_ROOT: ${{ github.workspace }}
-          OSINT_FORGE_STATE: /tmp/osint-forge-state
-        run: |
-          ./bin/osint --version
-          ./bin/osint forge validate
-          ./bin/osint forge list
+      - name: Bootstrap clean system
+        run: ./bootstrap.sh
 
-      - name: Exercise isolated install and batch integration tests
+      - name: Exercise installed framework
+        run: |
+          osint --version
+          osint forge validate
+          osint forge list
+          osint forge categories
+
+      - name: Exercise upgrade replacement
+        run: |
+          touch /usr/local/share/osint-forge/stale-release-test
+          ./scripts/install-framework.sh
+          test ! -e /usr/local/share/osint-forge/stale-release-test
+          osint forge validate
+
+      - name: Run integration tests
         env:
           OSINT_FORGE_ROOT: ${{ github.workspace }}
           OSINT_FORGE_STATE: /tmp/osint-forge-state
         run: python3 -m unittest discover -s tests -v
+
+      - name: Exercise plugin lifecycle dry-runs
+        env:
+          OSINT_FORGE_ROOT: /usr/local/share/osint-forge
+          OSINT_FORGE_STATE: /tmp/osint-forge-state
+          OSINT_FORGE_DRY_RUN: "1"
+        run: |
+          for plugin in exiftool ghunt maigret nmap recon-ng sherlock spiderfoot; do
+            plugin_dir="/usr/local/share/osint-forge/plugins/$plugin"
+            export OSINT_FORGE_PLUGIN_ID="$plugin"
+            export OSINT_FORGE_PLUGIN_DIR="$plugin_dir"
+            "$plugin_dir/install.sh"
+            "$plugin_dir/update.sh"
+            "$plugin_dir/remove.sh"
+          done
+
+      - name: Uninstall without deleting user data
+        run: |
+          test -f /root/.config/osint-forge/targets.txt
+          ./scripts/uninstall-framework.sh
+          test ! -e /usr/local/bin/osint
+          test ! -e /usr/local/share/osint-forge
+          test -f /root/.config/osint-forge/targets.txt
