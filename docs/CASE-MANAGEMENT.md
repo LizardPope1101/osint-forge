@@ -1,0 +1,120 @@
+# Case Management
+
+OSINT Forge cases provide a durable boundary around authorized investigation
+work. A case records why the work exists, its authorization scope, targets,
+execution provenance, raw tool output, and resumable job state.
+
+Case metadata is not a substitute for permission. Only investigate targets
+that you are legally and organizationally authorized to examine.
+
+## Workflow
+
+Create a case:
+
+```bash
+osint case create example-case \
+  --purpose "Investigate authorized brand impersonation" \
+  --authorization "Written authorization from Example Organization"
+```
+
+Add validated targets:
+
+```bash
+osint case add example-case username example_handle
+osint case add example-case email analyst@example.com
+osint case add example-case domain example.com
+osint case add example-case ip 192.0.2.10
+osint case add example-case image ./photograph.jpg
+```
+
+Preview compatible commands without executing tools:
+
+```bash
+osint case run example-case --dry-run
+```
+
+Run every compatible installed batch plugin, or select specific plugins:
+
+```bash
+osint case run example-case
+osint case run example-case --plugins maigret sherlock --jobs 2
+```
+
+Inspect progress and create a local summary:
+
+```bash
+osint case status example-case
+osint case status example-case --json
+osint case report example-case
+```
+
+## Resume behavior
+
+Each target/plugin pair has a stable job identifier. A normal case run:
+
+- skips jobs whose latest real execution completed successfully;
+- retries failed jobs;
+- runs new jobs created by newly added targets or plugins; and
+- preserves every run in a separate timestamped directory.
+
+Use `--rerun` to run successful jobs again. Dry runs are recorded as
+`previewed`, never `completed`, so a preview cannot suppress real execution.
+If a run is interrupted, completed job state is saved and missing work remains
+eligible for the next run.
+
+## Directory schema
+
+Cases default to `~/OSINT-Cases/<case-id>/`. Set `OSINT_FORGE_CASES` to use a
+different root.
+
+```text
+<case-id>/
+├── case.json
+├── activity.jsonl
+├── report.md
+├── notes/
+├── findings/
+└── runs/
+    └── <timestamp>/
+        ├── run.json
+        └── raw/
+            └── <target-type>/
+                └── <target-slug>/
+                    └── <plugin>/
+                        ├── status.json
+                        ├── stdout.log
+                        └── stderr.log
+```
+
+`case.json` is the versioned source of case metadata and current job state.
+Schema version 1 contains:
+
+- case ID, purpose, and authorization scope;
+- creation and update timestamps;
+- validated targets with stable target IDs; and
+- current job status with plugin version, exit status, last run, and raw-output
+  location.
+
+`activity.jsonl` is append-only. Every line is an independent JSON event with a
+UTC timestamp. Raw execution records preserve exact argument arrays rather
+than reconstructed shell commands.
+
+`notes/` is reserved for analyst-authored material. `findings/` is reserved for
+derived and reviewed findings. Neither is mixed with raw tool output.
+
+## Privacy and integrity
+
+Case directories are mode `0700`; case-owned files are mode `0600`. Case IDs
+cannot contain path separators, case directories cannot be symbolic links,
+and generated reports cannot escape their case directory.
+
+The report command produces a Markdown execution summary linked to raw output.
+It intentionally warns that tool output is not automatically a verified
+finding. Normalized findings and redacted export formats are planned for
+v0.4.
+
+## Schema compatibility
+
+OSINT Forge records a numeric case schema. Legacy unversioned case metadata is
+migrated to schema 1 with an appended migration event. A case created by a
+newer unsupported schema is rejected instead of being silently rewritten.
