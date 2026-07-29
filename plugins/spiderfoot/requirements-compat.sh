@@ -9,6 +9,11 @@ spiderfoot_requirements_file() {
     local overlay="${base}/.osint-forge-requirements.txt"
     local temporary
 
+    if [[ "${dry_run:-0}" == "1" && ! -x "$python" ]]; then
+        printf '%s\n' "$upstream"
+        return 0
+    fi
+
     if ! "$python" -c \
         'import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)'
     then
