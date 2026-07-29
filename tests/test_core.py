@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -368,6 +370,68 @@ class ExecutionTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"HOME": str(home), "PATH": "/usr/bin"}), \
                  mock.patch.object(Path, "home", return_value=home):
                 self.assertTrue(osint_forge.command_exists(command.name))
+
+    def test_lifecycle_includes_pipx_user_bin(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            user_bin = home / ".local" / "bin"
+            user_bin.mkdir(parents=True)
+            command = user_bin / "osint-forge-fake-command"
+            command.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            command.chmod(0o755)
+            script = home / "doctor.sh"
+            script.write_text(
+                "#!/bin/sh\ncommand -v osint-forge-fake-command >/dev/null\n",
+                encoding="utf-8",
+            )
+            script.chmod(0o755)
+            manifest = {
+                "id": "example",
+                "name": "Example",
+                "plugin_version": "1",
+                "lifecycle": {"doctor": "doctor.sh"},
+                "requires_root": {"doctor": False},
+            }
+            with mock.patch.dict(os.environ, {"HOME": str(home), "PATH": "/usr/bin"}), \
+                 mock.patch.object(Path, "home", return_value=home), \
+                 mock.patch.object(
+                     osint_forge,
+                     "require_plugin",
+                     return_value=(home, manifest),
+                 ):
+                rc = osint_forge.run_lifecycle("example", "doctor")
+
+            self.assertEqual(rc, 0)
+
+    def test_lifecycle_flushes_heading_before_child_output(self):
+        with tempfile.TemporaryDirectory() as temp:
+            plugin_dir = Path(temp)
+            script = plugin_dir / "doctor.sh"
+            script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            script.chmod(0o755)
+            manifest = {
+                "id": "example",
+                "name": "Example",
+                "plugin_version": "1",
+                "lifecycle": {"doctor": "doctor.sh"},
+                "requires_root": {"doctor": False},
+            }
+            output = io.StringIO()
+
+            def run(command_args, *, env, check):
+                print("CHILD")
+                return subprocess.CompletedProcess(command_args, 0)
+
+            with mock.patch.object(
+                osint_forge,
+                "require_plugin",
+                return_value=(plugin_dir, manifest),
+            ), mock.patch("subprocess.run", side_effect=run), \
+                 contextlib.redirect_stdout(output):
+                rc = osint_forge.run_lifecycle("example", "doctor")
+
+            self.assertEqual(rc, 0)
+            self.assertLess(output.getvalue().index("DOCTOR"), output.getvalue().index("CHILD"))
 
     def test_stale_install_record_does_not_claim_missing_tool_is_installed(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -952,6 +1016,43 @@ class ShellScriptTests(unittest.TestCase):
             )
         self.assertEqual(completed.returncode, 42)
         self.assertNotIn("OK: ghunt", completed.stdout)
+
+    @unittest.skipUnless(os.geteuid() == 0, "isolated bootstrap requires root")
+    def test_bootstrap_configures_pipx_user_path(self):
+        root = osint_forge.SOURCE_ROOT
+        with tempfile.TemporaryDirectory() as temp:
+            sandbox = Path(temp)
+            fake_bin = sandbox / "fake-bin"
+            fake_bin.mkdir()
+            calls = sandbox / "calls"
+            for name in ("apt-get", "pipx"):
+                executable = fake_bin / name
+                executable.write_text(
+                    f"#!/bin/sh\nprintf '%s %s\\n' {name} \"$*\" >> {calls}\n",
+                    encoding="utf-8",
+                )
+                executable.chmod(0o755)
+            target_home = sandbox / "home"
+            target_home.mkdir()
+            env = {
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "OSINT_FORGE_INSTALL_ROOT": str(sandbox / "share" / "osint-forge"),
+                "OSINT_FORGE_BIN_DIR": str(sandbox / "bin"),
+                "OSINT_FORGE_ETC_ROOT": str(sandbox / "etc" / "osint-forge"),
+                "OSINT_FORGE_TARGET_HOME": str(target_home),
+            }
+            completed = subprocess.run(
+                [str(root / "bootstrap.sh")],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            recorded = calls.read_text(encoding="utf-8")
+            self.assertIn("apt-get update", recorded)
+            self.assertIn("pipx ensurepath", recorded)
 
     @unittest.skipUnless(os.geteuid() == 0, "isolated framework install requires root")
     def test_framework_install_replaces_stale_files_and_uninstalls_cleanly(self):

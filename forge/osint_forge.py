@@ -549,6 +549,7 @@ def run_lifecycle(
     script = lifecycle_script(plugin_dir, manifest, action)
     env = {
         **os.environ,
+        "PATH": command_search_path(),
         "OSINT_FORGE_PLUGIN_ID": plugin_id,
         "OSINT_FORGE_PLUGIN_DIR": str(plugin_dir),
         "OSINT_FORGE_ROOT": str(forge_root()),
@@ -565,7 +566,7 @@ def run_lifecycle(
         # Preserve only Forge variables explicitly.
         cmd[1:1] = ["--preserve-env=OSINT_FORGE_PLUGIN_ID,OSINT_FORGE_PLUGIN_DIR,OSINT_FORGE_ROOT,OSINT_FORGE_STATE,OSINT_FORGE_DRY_RUN,OSINT_FORGE_ASSUME_YES"]
 
-    print(f"{action.upper():8} {plugin_id}: {shlex.join(cmd)}")
+    print(f"{action.upper():8} {plugin_id}: {shlex.join(cmd)}", flush=True)
     try:
         completed = subprocess.run(cmd, env=env, check=False)
     except OSError as exc:

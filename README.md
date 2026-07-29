@@ -29,7 +29,9 @@ chmod +x bootstrap.sh
 
 The bootstrap installs the base dependencies (`python3`, `python3-venv`,
 `python3-pip`, `pipx`, `git`, `sudo`, and `ca-certificates`) and installs the
-framework. Individual OSINT tools remain opt-in.
+framework. It also configures pipx's standard per-user binary directory for
+future login shells. Open a new terminal after bootstrap if the shell does not
+yet find a newly installed pipx command. Individual OSINT tools remain opt-in.
 
 ```bash
 osint forge list
