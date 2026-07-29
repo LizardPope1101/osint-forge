@@ -1043,6 +1043,34 @@ class ShellScriptTests(unittest.TestCase):
                         content,
                     )
 
+    def test_spiderfoot_lifecycle_installs_native_build_dependencies(self):
+        plugin = osint_forge.SOURCE_ROOT / "plugins" / "spiderfoot"
+        dependencies = (plugin / "build-dependencies.sh").read_text(encoding="utf-8")
+        for package in (
+            "build-essential",
+            "cargo",
+            "libffi-dev",
+            "libjpeg-dev",
+            "libopenjp2-7-dev",
+            "libssl-dev",
+            "libtinyxml2-dev",
+            "libxml2-dev",
+            "libxslt1-dev",
+            "python3-dev",
+            "swig",
+            "zlib1g-dev",
+        ):
+            self.assertIn(package, dependencies)
+        self.assertIn("run apt-get update", dependencies)
+        self.assertIn('run apt-get install -y "${spiderfoot_build_dependencies[@]}"', dependencies)
+        for lifecycle in ("install.sh", "update.sh"):
+            content = (plugin / lifecycle).read_text(encoding="utf-8")
+            self.assertIn(
+                'source "${OSINT_FORGE_PLUGIN_DIR}/build-dependencies.sh"',
+                content,
+            )
+            self.assertIn("install_spiderfoot_build_dependencies", content)
+
     def test_missing_dependency_does_not_fail_dry_run(self):
         common = osint_forge.SOURCE_ROOT / "scripts" / "plugin-common.sh"
         script = (

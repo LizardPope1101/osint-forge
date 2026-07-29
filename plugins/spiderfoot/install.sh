@@ -2,9 +2,12 @@
 # SPDX-FileCopyrightText: 2026 LizardPope1101
 # SPDX-License-Identifier: GPL-3.0-or-later
 source "${OSINT_FORGE_ROOT}/scripts/plugin-common.sh"
+# shellcheck source=plugins/spiderfoot/build-dependencies.sh
+source "${OSINT_FORGE_PLUGIN_DIR}/build-dependencies.sh"
 need git
 need python3
 base="/opt/osint-forge/spiderfoot"
+install_spiderfoot_build_dependencies
 run mkdir -p /opt/osint-forge
 if [[ "$dry_run" == "1" ]]; then
     run git clone https://github.com/smicallef/spiderfoot "$base"

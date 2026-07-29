@@ -21,6 +21,8 @@ stable release, minor versions may include breaking changes.
   umask on both fresh installs and updates.
 - Protect SpiderFoot configuration, credentials, and scan data with the same
   owner-only launcher policy on fresh installs and updates.
+- Provision SpiderFoot's native compiler, Python, XML/XSLT, SSL/FFI, image,
+  SWIG, and Rust build dependencies on supported Debian and Ubuntu systems.
 
 ## 0.3.0 - 2026-07-28
 
