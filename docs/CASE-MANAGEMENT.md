@@ -146,6 +146,13 @@ It does not perform recursive discovery or automated identity attribution.
 See [Entity Model](ENTITY-MODEL.md) for the complete contract and its
 confidence boundary.
 
+By v1.0, a case is intended to carry the complete evidence graph for a bounded
+investigation: supplied seeds, extracted candidates, relationships,
+contradictions, confidence assessments, queue decisions, analyst actions, and
+the rationale for each pursued lead. These capabilities will arrive through
+the versioned stages in the [Roadmap to v1.0](ROADMAP.md); the current v0.4
+projection remains read-only and seed-only.
+
 ## Privacy and integrity
 
 Case directories are mode `0700`; case-owned files are mode `0600`. Case IDs

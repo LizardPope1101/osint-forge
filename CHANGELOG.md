@@ -25,6 +25,8 @@ stable release, minor versions may include breaking changes.
   rerun when their plugin contract version changes.
 - Reports retain completed, failed, and previewed outcomes and surface
   normalization errors instead of silently dropping them.
+- Project documentation now defines the committed path from v0.4 seed entities
+  through a stable, bounded recursive intelligence workflow in v1.0.
 
 ### Security
 

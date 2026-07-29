@@ -5,6 +5,13 @@ are not automatically identity-resolved entities. See
 [Entity Model](ENTITY-MODEL.md) for the seed contract and future correlation
 boundary.
 
+The [Roadmap to v1.0](ROADMAP.md) extends reporting from normalized tool output
+to evidence-backed intelligence. Future reports will preserve lower-confidence
+leads and contradictions internally while allowing a final intelligence view
+to apply an explicit confidence threshold. No automated score will replace raw
+evidence, source independence analysis, correlation rationale, or analyst
+judgment.
+
 OSINT Forge v0.4 converts heterogeneous tool output into a common finding
 contract without replacing raw evidence. JSON is the machine-readable master;
 Markdown, HTML, and CSV are deterministic views of the same report.
