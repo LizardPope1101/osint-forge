@@ -774,6 +774,7 @@ def run_adapter(plugin_id: str, target_type: str, value: str, output_dir: Path, 
                 stdout=out,
                 stderr=err,
                 env=env,
+                umask=0o077,
                 check=False,
             )
             exit_code = completed.returncode
