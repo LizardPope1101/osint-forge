@@ -189,6 +189,15 @@ third-party tools and case data are left intact.
 Do not report vulnerabilities publicly. Follow the project's
 [Security Policy](.github/SECURITY.md) for scope and private-reporting guidance.
 
+## Project governance
+
+Project ownership, decision authority, access control, policy precedence, and
+administrative change management are defined in
+[`GOVERNANCE.md`](GOVERNANCE.md). AI-assisted work and the exclusive authority
+to connect AI systems to the repository are governed by
+[`AI_POLICY.md`](AI_POLICY.md). Contributors should also review
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 ## License
 
 OSINT Forge is licensed under the
