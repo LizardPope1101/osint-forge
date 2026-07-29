@@ -11,6 +11,11 @@ version 3 or any later version (`GPL-3.0-or-later`).
 Do not submit code, datasets, credentials, personal information, or other
 material that you do not have the right to distribute.
 
+Project authority is defined in [`GOVERNANCE.md`](GOVERNANCE.md). AI-assisted
+work is governed by [`AI_POLICY.md`](AI_POLICY.md). Contributors may use
+disconnected AI assistance, but only LizardPope1101 may establish an AI
+connection to the repository or repository-integrated tooling.
+
 ## Development expectations
 
 - Keep the framework modular; tool-specific behavior belongs in a plugin.
@@ -31,6 +36,8 @@ material that you do not have the right to distribute.
 - Include or update repository documentation when behavior changes. Defer
   release-specific wiki changes until live validation establishes the final
   behavior, then publish them through the sequential release process.
+- Disclose material AI assistance in the pull request and personally review,
+  understand, and accept responsibility for the submitted work.
 - Test lifecycle operations with `--dry-run` before exercising them on a host.
 
 ## Validation

@@ -33,6 +33,10 @@ an established channel and include only enough information to arrange a secure
 exchange. Do not place exploit details, credentials, personal information,
 targets, authentication material, or case data in a public channel.
 
+Do not submit a non-public vulnerability report, exploit detail, credential,
+case artifact, or other sensitive report content to an AI system. AI-assisted
+security work is additionally governed by [`AI_POLICY.md`](../AI_POLICY.md).
+
 A useful report includes:
 
 - A concise description of the vulnerability and its likely impact
@@ -116,6 +120,8 @@ Users should:
 - Use restrained concurrency and network-scan defaults.
 - Keep the framework and all independently installed tools updated.
 - Never commit targets, reports, credentials, or case data.
+- Do not place credentials, private vulnerability details, case data, or
+  investigation results in AI prompts or generated artifacts.
 
 OSINT Forge creates its own state and result artifacts with owner-only
 permissions. Users remain responsible for permissions on parent directories,
