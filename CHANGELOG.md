@@ -19,6 +19,8 @@ stable release, minor versions may include breaking changes.
 - Use UTC batch run identifiers consistent with case and provenance timestamps.
 - Protect Recon-ng API keys and workspace data with an owner-only launcher
   umask on both fresh installs and updates.
+- Protect SpiderFoot configuration, credentials, and scan data with the same
+  owner-only launcher policy on fresh installs and updates.
 
 ## 0.3.0 - 2026-07-28
 

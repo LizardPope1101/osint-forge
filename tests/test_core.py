@@ -1025,18 +1025,23 @@ class CaseManagementTests(unittest.TestCase):
 
 
 class ShellScriptTests(unittest.TestCase):
-    def test_recon_ng_lifecycle_deploys_private_launcher(self):
-        plugin = osint_forge.SOURCE_ROOT / "plugins" / "recon-ng"
-        launcher = (plugin / "launcher.sh").read_text(encoding="utf-8")
-        self.assertIn("umask 0077", launcher)
-        self.assertIn('exec /opt/osint-forge/recon-ng/.venv/bin/python', launcher)
-        for lifecycle in ("install.sh", "update.sh"):
-            content = (plugin / lifecycle).read_text(encoding="utf-8")
-            self.assertIn(
-                'install -m 0755 "${OSINT_FORGE_PLUGIN_DIR}/launcher.sh" '
-                "/usr/local/bin/recon-ng",
-                content,
-            )
+    def test_source_framework_lifecycles_deploy_private_launchers(self):
+        for plugin_id, entrypoint in (
+            ("recon-ng", "recon-ng/.venv/bin/python"),
+            ("spiderfoot", "spiderfoot/.venv/bin/python"),
+        ):
+            with self.subTest(plugin=plugin_id):
+                plugin = osint_forge.SOURCE_ROOT / "plugins" / plugin_id
+                launcher = (plugin / "launcher.sh").read_text(encoding="utf-8")
+                self.assertIn("umask 0077", launcher)
+                self.assertIn(f"exec /opt/osint-forge/{entrypoint}", launcher)
+                for lifecycle in ("install.sh", "update.sh"):
+                    content = (plugin / lifecycle).read_text(encoding="utf-8")
+                    self.assertIn(
+                        'install -m 0755 "${OSINT_FORGE_PLUGIN_DIR}/launcher.sh" '
+                        f"/usr/local/bin/{plugin_id}",
+                        content,
+                    )
 
     def test_missing_dependency_does_not_fail_dry_run(self):
         common = osint_forge.SOURCE_ROOT / "scripts" / "plugin-common.sh"
