@@ -99,22 +99,26 @@ def write_private_text(path: Path, content: str) -> None:
         raise
 
 
-def secure_case_directory(path: Path, root: Path) -> None:
+def secure_private_directory(path: Path, root: Path, context: str) -> None:
     if path != root and root not in path.parents:
-        raise RuntimeError(f"Refusing case directory outside {root}: {path}")
+        raise RuntimeError(f"Refusing {context} directory outside {root}: {path}")
     relative_parts = path.relative_to(root).parts
     current = root
     for part in ("", *relative_parts):
         if part:
             current = current / part
         if current.is_symlink():
-            raise RuntimeError(f"Refusing symbolic-link case directory: {current}")
+            raise RuntimeError(f"Refusing symbolic-link {context} directory: {current}")
         try:
             current.mkdir(mode=0o700)
         except FileExistsError:
             if not current.is_dir():
-                raise RuntimeError(f"Case path is not a directory: {current}")
+                raise RuntimeError(f"{context.capitalize()} path is not a directory: {current}")
         current.chmod(0o700)
+
+
+def secure_case_directory(path: Path, root: Path) -> None:
+    secure_private_directory(path, root, "case")
 
 
 def open_private_log(path: Path):
@@ -859,7 +863,7 @@ def create_run_directory(output_root: Path, name: str, stamp: str | None = None)
     """Create a unique batch directory, even for runs started simultaneously."""
     output_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     output_root.chmod(0o700)
-    timestamp = stamp or dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    timestamp = stamp or dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     label = safe_slug(name).rsplit("--", 1)[0]
     base = output_root / f"{timestamp}-{label}"
     for attempt in range(1000):
@@ -900,6 +904,8 @@ def cmd_batch(args: argparse.Namespace) -> int:
         (pid, target_type, value, run_dir / f"{target_type}s" / safe_slug(value) / pid)
         for pid, target_type, value in jobs
     ]
+    for *_, output in scheduled:
+        secure_private_directory(output, run_dir, "batch")
 
     print(f"Run directory: {run_dir}")
     print(f"Targets: {len(targets)} | Jobs: {len(scheduled)} | Concurrency: {args.jobs}")
