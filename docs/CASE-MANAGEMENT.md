@@ -24,6 +24,9 @@ osint case add example-case username example_handle
 osint case add example-case email analyst@example.com
 osint case add example-case domain example.com
 osint case add example-case ip 192.0.2.10
+osint case add example-case name "Example Person"
+osint case add example-case phone "+1 (555) 555-0100"
+osint case add example-case address "1 Example Way, Example City, NY"
 osint case add example-case image ./photograph.jpg
 ```
 
@@ -45,6 +48,8 @@ Inspect progress and create a local summary:
 ```bash
 osint case status example-case
 osint case status example-case --json
+osint case entities example-case
+osint case entities example-case --json
 osint case report example-case
 osint case report example-case --format all
 osint case report example-case --format all --shareable
@@ -113,6 +118,33 @@ than reconstructed shell commands.
 
 `notes/` is reserved for analyst-authored material. `findings/` is reserved for
 derived and reviewed findings. Neither is mixed with raw tool output.
+
+## Entity foundation
+
+The v0.4 development line introduces a versioned, read-only entity projection:
+
+```bash
+osint case entities example-case --json
+```
+
+Every existing case target becomes a deterministic canonical entity with its
+original value, comparison value, stable entity ID, seed origin, and source
+target record. Email addresses and domains are compared case-insensitively;
+phone formatting is normalized; and repeated whitespace and case are
+normalized for names and addresses.
+
+Seed confidence describes input fidelity only: the operator deliberately
+supplied the value. It does not assert that the seed belongs to a particular
+person, that an address is current, or that any relationship has been proven.
+The initial relationship collection is empty.
+
+This projection is derived rather than independently persisted, so it cannot
+drift from `case.json`. It establishes the contract that later versions can
+extend with entities and relationships extracted from normalized findings,
+correlation evidence, confidence assessments, and controlled discovery queues.
+It does not perform recursive discovery or automated identity attribution.
+See [Entity Model](ENTITY-MODEL.md) for the complete contract and its
+confidence boundary.
 
 ## Privacy and integrity
 

@@ -15,6 +15,9 @@ stable release, minor versions may include breaking changes.
   raw evidence.
 - Analyst confidence and note annotations through `osint case annotate`.
 - Conservative `--shareable` report redaction.
+- Versioned canonical seed-entity projection through `osint case entities`.
+- Name, phone, and address case targets as groundwork for future correlation
+  and controlled recursive discovery.
 
 ### Changed
 

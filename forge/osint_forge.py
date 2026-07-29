@@ -20,8 +20,9 @@ import time
 from typing import Any, Iterable
 
 try:
-    from . import reporting
+    from . import entities, reporting
 except ImportError:
+    import entities
     import reporting
 
 __version__ = "0.4.0-dev"
@@ -37,7 +38,11 @@ EMAIL_RE = re.compile(r"^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,63}$", re.I)
 DOMAIN_RE = re.compile(r"^(?=.{1,253}$)(?:[A-Z0-9](?:[A-Z0-9\-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,63}$", re.I)
 IP_RE = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
 USERNAME_RE = re.compile(r"^[^\s/@]{1,128}$")
-TARGET_TYPES = {"email", "username", "domain", "ip", "image", "file"}
+PHONE_RE = re.compile(r"^\+?[0-9][0-9 .()\-]{5,30}[0-9]$")
+TARGET_TYPES = {
+    "address", "domain", "email", "file", "image", "ip", "name", "phone",
+    "username",
+}
 ADAPTER_PLACEHOLDERS = {"{target}", "{output_dir}", "{plugin_dir}"}
 NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 
@@ -288,10 +293,28 @@ def create_case_run_directory(path: Path) -> Path:
 
 
 def normalize_case_target(target_type: str, value: str) -> str:
+    value = value.strip()
     if target_type in {"image", "file"}:
         value = str(Path(value).expanduser().resolve())
+    elif target_type in {"name", "address"}:
+        value = " ".join(value.split())
+    elif target_type == "phone":
+        prefix = "+" if value.startswith("+") else ""
+        value = prefix + "".join(character for character in value if character.isdigit())
     if not validate_target(target_type, value):
         raise SystemExit(f"Invalid {target_type}: {value}")
+    return value
+
+
+def canonical_entity_value(target_type: str, value: str) -> str:
+    """Return a stable comparison value without changing preserved evidence."""
+    if target_type in {"email", "domain"}:
+        return value.casefold().removesuffix(".")
+    if target_type in {"name", "address"}:
+        return " ".join(value.split()).casefold()
+    if target_type == "phone":
+        prefix = "+" if value.startswith("+") else ""
+        return prefix + "".join(character for character in value if character.isdigit())
     return value
 
 
@@ -748,6 +771,19 @@ def validate_target(target_type: str, value: str) -> bool:
         return all(0 <= int(part) <= 255 for part in value.split("."))
     if target_type in {"image", "file"}:
         return Path(value).expanduser().is_file()
+    if target_type == "phone":
+        if not PHONE_RE.fullmatch(value):
+            return False
+        digits = "".join(character for character in value if character.isdigit())
+        return 7 <= len(digits) <= 15
+    if target_type == "name":
+        return 1 <= len(value) <= 256 and not any(
+            ord(character) < 32 for character in value
+        )
+    if target_type == "address":
+        return 1 <= len(value) <= 512 and not any(
+            ord(character) < 32 for character in value
+        )
     return bool(value.strip())
 
 
@@ -1312,6 +1348,23 @@ def cmd_case_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_case_entities(args: argparse.Namespace) -> int:
+    _, metadata = load_case(args.case)
+    projection = entities.build_seed_entities(metadata, canonical_entity_value)
+    if args.json:
+        print(json.dumps(projection, indent=2, sort_keys=True))
+        return 0
+    if not projection["entities"]:
+        print("No case entities.")
+        return 0
+    for entity in projection["entities"]:
+        print(
+            f"{entity['id']}  {entity['type']:<10} "
+            f"{entity['origin']:<6} {entity['value']}"
+        )
+    return 0
+
+
 def build_case_report(path: Path, metadata: dict[str, Any]) -> dict[str, Any]:
     return reporting.build_report(path, metadata, catalog(), __version__)
 
@@ -1611,6 +1664,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("case")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_case_status)
+
+    p = cs.add_parser(
+        "entities",
+        help="list canonical seed entities and their provenance",
+    )
+    p.add_argument("case")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_case_entities)
 
     p = cs.add_parser("report", help="write normalized provenance-linked reports")
     p.add_argument("case")

@@ -1,5 +1,10 @@
 # Normalized Reporting
 
+Normalized findings are the evidence input for the emerging entity model; they
+are not automatically identity-resolved entities. See
+[Entity Model](ENTITY-MODEL.md) for the seed contract and future correlation
+boundary.
+
 OSINT Forge v0.4 converts heterogeneous tool output into a common finding
 contract without replacing raw evidence. JSON is the machine-readable master;
 Markdown, HTML, and CSV are deterministic views of the same report.
