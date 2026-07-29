@@ -29,6 +29,8 @@ material that you do not have the right to distribute.
 - Reporting changes must verify traceability, explicit failed and previewed
   outcomes, cross-format agreement, redaction, and deterministic regeneration.
 - Include or update documentation when behavior changes.
+- Stage unreleased wiki revisions in `docs/wiki-drafts/`; publish them only
+  after the applicable live-validation and sequential release gates pass.
 - Test lifecycle operations with `--dry-run` before exercising them on a host.
 
 ## Validation
