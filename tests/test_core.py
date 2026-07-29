@@ -1175,6 +1175,30 @@ class ShellScriptTests(unittest.TestCase):
             )
             self.assertFalse((base / ".osint-forge-requirements.txt").exists())
 
+    def test_spiderfoot_requirements_dry_run_without_python_is_quiet(self):
+        plugin = osint_forge.SOURCE_ROOT / "plugins" / "spiderfoot"
+        helper = plugin / "requirements-compat.sh"
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            upstream = base / "requirements.txt"
+            upstream.write_text("lxml>=4.9.2,<5\n", encoding="utf-8")
+            command = (
+                "dry_run=1\n"
+                f"source {shlex.quote(str(helper))}\n"
+                f"spiderfoot_requirements_file {shlex.quote(str(base))} "
+                f"{shlex.quote(str(base / 'missing-python'))}\n"
+            )
+            completed = subprocess.run(
+                ["bash", "-c", command],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(Path(completed.stdout.strip()), upstream)
+            self.assertEqual(completed.stderr, "")
+            self.assertFalse((base / ".osint-forge-requirements.txt").exists())
+
     def test_spiderfoot_requirements_overlay_fails_closed(self):
         plugin = osint_forge.SOURCE_ROOT / "plugins" / "spiderfoot"
         helper = plugin / "requirements-compat.sh"

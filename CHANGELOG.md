@@ -28,6 +28,7 @@ stable release, minor versions may include breaking changes.
   creating empty run artifacts when no installed plugin matches.
 - Treat stale installation records as uninstalled when the underlying command
   is missing.
+- Keep SpiderFoot update previews quiet before its virtual environment exists.
 - Add pipx's per-user binary directory to plugin lifecycle environments so
   doctor, update, and removal checks agree with installed-plugin detection.
 - Configure pipx's user path during bootstrap for future login shells.
