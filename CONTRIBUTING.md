@@ -28,9 +28,9 @@ material that you do not have the right to distribute.
   output. Normalizers cannot use the network or modify raw evidence.
 - Reporting changes must verify traceability, explicit failed and previewed
   outcomes, cross-format agreement, redaction, and deterministic regeneration.
-- Include or update documentation when behavior changes.
-- Stage unreleased wiki revisions in `docs/wiki-drafts/`; publish them only
-  after the applicable live-validation and sequential release gates pass.
+- Include or update repository documentation when behavior changes. Defer
+  release-specific wiki changes until live validation establishes the final
+  behavior, then publish them through the sequential release process.
 - Test lifecycle operations with `--dry-run` before exercising them on a host.
 
 ## Validation
