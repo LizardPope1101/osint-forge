@@ -13,9 +13,5 @@ else
     python3 -m venv "$base/.venv"
     "$base/.venv/bin/pip" install --upgrade pip wheel
     "$base/.venv/bin/pip" install -r "$base/requirements.txt"
-    cat >/usr/local/bin/spiderfoot <<'EOF'
-#!/usr/bin/env bash
-exec /opt/osint-forge/spiderfoot/.venv/bin/python /opt/osint-forge/spiderfoot/sf.py "$@"
-EOF
-    chmod 0755 /usr/local/bin/spiderfoot
+    install -m 0755 "${OSINT_FORGE_PLUGIN_DIR}/launcher.sh" /usr/local/bin/spiderfoot
 fi
