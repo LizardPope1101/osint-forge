@@ -27,6 +27,12 @@ fi
   python3-venv \
   sudo
 
+if [[ ${EUID} -eq 0 && -n ${SUDO_USER:-} && ${SUDO_USER} != "root" ]]; then
+  sudo -H -u "$SUDO_USER" pipx ensurepath
+else
+  pipx ensurepath
+fi
+
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 if [[ ${EUID} -eq 0 ]]; then
   "$ROOT/scripts/install-framework.sh"

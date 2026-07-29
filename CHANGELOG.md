@@ -7,6 +7,13 @@ stable release, minor versions may include breaking changes.
 
 ## Unreleased
 
+### Fixed
+
+- Add pipx's per-user binary directory to plugin lifecycle environments so
+  doctor, update, and removal checks agree with installed-plugin detection.
+- Configure pipx's user path during bootstrap for future login shells.
+- Flush lifecycle headings before child-process output when logs are piped.
+
 ## 0.3.0 - 2026-07-28
 
 ### Added
