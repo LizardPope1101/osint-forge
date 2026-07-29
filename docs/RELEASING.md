@@ -16,5 +16,20 @@ repository. The authoritative process requires AI-assisted, human-operated
 testing on a current Debian stable VM after merge and before tagging, including
 a patch-and-retest loop when defects are found.
 
+Publishing the GitHub release does not complete the process. The authoritative
+procedure includes a mandatory administrative closeout after publication:
+
+- announce the release in GitHub Discussions with a high-level overview and a
+  link to the versioned changelog;
+- update every applicable repository document to describe the released
+  behavior and identify the new stable version;
+- update every applicable wiki page, including release, command, operational,
+  architectural, and roadmap guidance; and
+- verify the announcement, documentation, wiki links, release artifacts, and
+  installation from the published tag.
+
+Administrative closeout is a numbered release gate. It may not be skipped or
+treated as optional follow-up work.
+
 Do not publish a release containing target data, reports, credentials, cookies,
 tokens, local state, or investigation artifacts.

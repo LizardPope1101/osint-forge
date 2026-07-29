@@ -47,6 +47,23 @@ direct commit may be used for an administrative correction, typo, link,
 metadata update, or urgent fix when LizardPope1101 specifically authorizes it.
 Direct commits remain subject to appropriate validation and verification.
 
+## Release administration
+
+An official release is not administratively complete when its tag or GitHub
+release is published. The numbered wiki Release Process also requires a
+post-publication closeout that:
+
+- announces the release in GitHub Discussions with a high-level overview and a
+  link to the versioned changelog;
+- updates every applicable repository document and wiki page to match the
+  released behavior and stable version; and
+- verifies the announcement, documentation, wiki links, release artifacts, and
+  installation from the published tag.
+
+These actions are release gates rather than optional publicity or deferred
+housekeeping. LizardPope1101 retains final authority over announcement wording,
+documentation scope, and release completion.
+
 ## Policy precedence
 
 Applicable law and the GNU General Public License cannot be waived by project
