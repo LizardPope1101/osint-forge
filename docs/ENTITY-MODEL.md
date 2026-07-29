@@ -84,15 +84,20 @@ number.
 
 ## Forward compatibility
 
-Later releases can extend the contract with:
+The entity model is one layer of the committed
+[Roadmap to v1.0](ROADMAP.md). Planned releases extend it in controlled steps:
 
-1. entities extracted from normalized findings;
-2. evidence-backed relationships;
-3. canonical deduplication that retains every source;
-4. transparent confidence assessments;
-5. plugin declarations for accepted and emitted entity types;
-6. bounded discovery queues with cycle and scope controls; and
-7. analyst-reviewed intelligence reporting.
+1. v0.5 adds plugin declarations for accepted and emitted entity types plus
+   candidate-entity extraction from normalized findings.
+2. v0.6 adds entity-aware planning and explainable plugin selection.
+3. v0.7 binds entity and relationship provenance into integrity and export
+   contracts.
+4. v0.8 adds evidence-backed relationships, source-aware correlation, and
+   separate observation, relationship, and identity confidence.
+5. v0.9 adds bounded discovery queues with cycle, resource, approval, and
+   authorization-scope controls.
+6. v1.0 stabilizes the end-to-end workflow and confidence-filtered intelligence
+   report.
 
 Schema changes must remain versioned, tested, provenance-preserving, and
 readable by explicit migrations or compatibility layers.

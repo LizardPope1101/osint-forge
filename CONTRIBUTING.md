@@ -28,6 +28,17 @@ connection to the repository or repository-integrated tooling.
   pull requests.
 - Preserve raw evidence, provenance, owner-only permissions, resumability, and
   schema migration behavior when changing case or reporting features.
+- Follow the committed [Roadmap to v1.0](docs/ROADMAP.md). Entity,
+  relationship, confidence, workflow, and discovery changes must be additive,
+  versioned, deterministic, and independently testable.
+- Preserve the distinction among source observations, automated inferences,
+  and analyst-confirmed intelligence. Do not add opaque identity or risk
+  scoring.
+- Correlation and deduplication must retain every source, contradiction, and
+  rationale. Repeated copies of one underlying source cannot be represented as
+  independent corroboration.
+- Recursive or automatically scheduled work must remain opt-in, bounded,
+  auditable, resumable, and constrained to explicit authorization scope.
 - Batch plugins must include a deterministic, standard-library-only normalizer
   and synthetic fixtures covering positive, negative, malformed, and missing
   output. Normalizers cannot use the network or modify raw evidence.
@@ -77,6 +88,12 @@ installation, safety, and authorization review. It must pass install, update,
 remove, doctor, contract, dry-run, and disposable-environment tests before
 entering the catalog. Record an accept, defer, or reject decision rather than
 silently weakening these requirements.
+
+The v0.5 entity-aware contract will additionally require plugins to declare
+accepted and emitted entity types and to extract candidate entities
+deterministically from preserved output. Until that contract is released,
+do not invent undocumented manifest fields or imply that current findings are
+automatically correlated entities.
 
 The upstream tool remains an independent work under its own license. Do not
 copy upstream source code into OSINT Forge unless its license is compatible and

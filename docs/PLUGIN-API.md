@@ -62,12 +62,37 @@ upstream tool; they do not change the OSINT Forge license.
 
 Core target types are:
 
+- `address`
 - `email`
 - `username`
 - `domain`
 - `ip`
 - `image`
 - `file`
+- `name`
+- `phone`
+
+A core target type is not necessarily supported by a current plugin. Plugins
+receive only types listed in their own `supports` and `adapters` contracts.
+
+## Entity-aware contract trajectory
+
+The current schema 1 `supports` field declares accepted case target types.
+Under the committed [Roadmap to v1.0](ROADMAP.md), v0.5 will introduce a
+versioned contract that also declares candidate entity types a plugin
+normalizer can emit.
+
+That future contract must:
+
+- remain explicit and machine-validatable;
+- preserve the raw source file and target provenance for every candidate;
+- distinguish extracted observations from identity or relationship inferences;
+- use deterministic, network-free normalizers;
+- reject unknown future schema versions; and
+- avoid silently treating arbitrary finding values as entities.
+
+Until that schema is implemented and released, plugin authors must use only
+the documented schema 1 fields below.
 
 ## Adapter placeholders
 

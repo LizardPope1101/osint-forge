@@ -3,8 +3,12 @@
 [![CI](https://github.com/LizardPope1101/osint-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/LizardPope1101/osint-forge/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/LizardPope1101/osint-forge)](https://github.com/LizardPope1101/osint-forge/releases/latest)
 
-OSINT Forge is a modular tool manager and workflow layer for a minimal
-Debian-based OSINT workstation.
+OSINT Forge is a modular OSINT tool manager and evidence-preserving
+investigation workflow for a minimal Debian-based workstation. Its v1.0
+direction is an authorized, bounded intelligence workflow that can start with
+multiple known entities, coordinate compatible tools, correlate new leads, and
+produce transparent confidence-filtered reporting without discarding raw
+evidence.
 
 Use it only for lawful research. Network scanning must be limited to systems
 you own or are explicitly authorized to assess.
@@ -175,15 +179,22 @@ Copy `docs/plugin-template` to start a new plugin. See
 
 ## Roadmap
 
-Development is tracked in public release issues:
+The complete recursive intelligence workflow is a committed v1.0 goal, not a
+post-v1.0 possibility. Development proceeds additively so current case,
+plugin, evidence, and CLI behavior remains testable while the new entity,
+correlation, and discovery layers mature.
 
-- [v0.4: normalized reporting](https://github.com/LizardPope1101/osint-forge/issues/6)
-- [v0.5: governed plugin expansion](https://github.com/LizardPope1101/osint-forge/issues/13)
-- [v0.6: reusable investigation workflows](https://github.com/LizardPope1101/osint-forge/issues/18)
+See the canonical repository [Roadmap to v1.0](docs/ROADMAP.md) and the
+[architecture tracking issue](https://github.com/LizardPope1101/osint-forge/issues/44).
+Release work is tracked in:
+
+- [v0.4: normalized reporting and seed entities](https://github.com/LizardPope1101/osint-forge/issues/6)
+- [v0.5: entity-aware plugin expansion](https://github.com/LizardPope1101/osint-forge/issues/13)
+- [v0.6: entity-aware planning and workflows](https://github.com/LizardPope1101/osint-forge/issues/18)
 - [v0.7: evidence integrity and portable exports](https://github.com/LizardPope1101/osint-forge/issues/14)
-- [v0.8: analyst review, correlation, and finding lifecycle](https://github.com/LizardPope1101/osint-forge/issues/15)
-- [v0.9: platform hardening and v1 contract freeze](https://github.com/LizardPope1101/osint-forge/issues/17)
-- [v1.0: first stable release](https://github.com/LizardPope1101/osint-forge/issues/16)
+- [v0.8: correlation and transparent confidence](https://github.com/LizardPope1101/osint-forge/issues/15)
+- [v0.9: controlled recursive discovery and v1 contract freeze](https://github.com/LizardPope1101/osint-forge/issues/17)
+- [v1.0: stable intelligence workflow](https://github.com/LizardPope1101/osint-forge/issues/16)
 
 Until v1.0, minor releases may include breaking changes. Review the
 [changelog](CHANGELOG.md) before upgrading.
