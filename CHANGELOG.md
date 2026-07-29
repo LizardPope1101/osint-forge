@@ -17,6 +17,8 @@ stable release, minor versions may include breaking changes.
   adapter processes inside case output.
 - Enforce owner-only permissions on every intermediate batch output directory.
 - Use UTC batch run identifiers consistent with case and provenance timestamps.
+- Protect Recon-ng API keys and workspace data with an owner-only launcher
+  umask on both fresh installs and updates.
 
 ## 0.3.0 - 2026-07-28
 
