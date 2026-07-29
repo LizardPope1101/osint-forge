@@ -29,7 +29,7 @@ body:
       description: Redact all sensitive target values.
     validations:
       required: true
-  - type: input
+  - type: textarea
     id: expected
     attributes:
       label: Expected behavior
