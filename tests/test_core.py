@@ -168,6 +168,25 @@ class TargetTests(unittest.TestCase):
         self.assertTrue(osint_forge.validate_target("ip", "192.0.2.10"))
         self.assertFalse(osint_forge.validate_target("ip", "999.0.2.10"))
         self.assertFalse(osint_forge.validate_target("domain", "https://example.com"))
+        self.assertTrue(osint_forge.validate_target("phone", "+1 (555) 555-0100"))
+        self.assertFalse(osint_forge.validate_target("phone", "555"))
+        self.assertTrue(osint_forge.validate_target("name", "Example Person"))
+        self.assertTrue(osint_forge.validate_target("address", "1 Example Way"))
+        self.assertFalse(osint_forge.validate_target("name", "Example\nPerson"))
+
+    def test_entity_canonicalization_is_type_aware(self):
+        self.assertEqual(
+            osint_forge.canonical_entity_value("email", "Analyst@Example.COM"),
+            "analyst@example.com",
+        )
+        self.assertEqual(
+            osint_forge.canonical_entity_value("phone", "+1 (555) 555-0100"),
+            "+15555550100",
+        )
+        self.assertEqual(
+            osint_forge.canonical_entity_value("name", "  Example   Person "),
+            "example person",
+        )
 
     def test_batch_parser_deduplicates_and_normalizes_sections(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -634,6 +653,86 @@ class CaseManagementTests(unittest.TestCase):
             ]
             self.assertEqual(events, ["case_created", "target_added"])
 
+    def test_case_entities_project_normalized_seeds_with_provenance(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            self.create_case(root)
+            self.assertEqual(
+                self.add_target(
+                    root,
+                    target_type="email",
+                    value="Analyst@Example.COM",
+                ),
+                0,
+            )
+            self.assertEqual(
+                self.add_target(
+                    root,
+                    target_type="email",
+                    value="analyst@example.com",
+                ),
+                0,
+            )
+            self.assertEqual(
+                self.add_target(
+                    root,
+                    target_type="phone",
+                    value="+1 (555) 555-0100",
+                ),
+                0,
+            )
+            self.assertEqual(
+                self.add_target(
+                    root,
+                    target_type="name",
+                    value="  Example   Person  ",
+                ),
+                0,
+            )
+            output = io.StringIO()
+            with mock.patch.dict(
+                os.environ,
+                {"OSINT_FORGE_CASES": str(root)},
+            ), contextlib.redirect_stdout(output):
+                rc = osint_forge.cmd_case_entities(
+                    argparse.Namespace(case="case-001", json=True)
+                )
+            self.assertEqual(rc, 0)
+            projection = json.loads(output.getvalue())
+            self.assertEqual(projection["schema"], 1)
+            self.assertEqual(projection["entity_count"], 3)
+            self.assertEqual(projection["relationships"], [])
+            by_type = {
+                entity["type"]: entity
+                for entity in projection["entities"]
+            }
+            self.assertEqual(
+                by_type["email"]["canonical_value"],
+                "analyst@example.com",
+            )
+            self.assertEqual(len(by_type["email"]["sources"]), 2)
+            self.assertEqual(
+                by_type["phone"]["canonical_value"],
+                "+15555550100",
+            )
+            self.assertEqual(by_type["name"]["value"], "Example Person")
+            self.assertEqual(
+                by_type["name"]["confidence"],
+                {
+                    "score": 1.0,
+                    "scope": "seed_fidelity",
+                    "method": "operator_supplied",
+                },
+            )
+            self.assertEqual(
+                by_type["name"]["sources"][0]["kind"],
+                "case_target",
+            )
+            self.assertEqual(
+                by_type["name"]["sources"][0]["target_id"],
+                osint_forge.target_id("name", "Example Person"),
+            )
+
     def test_case_cli_end_to_end(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "cases"
@@ -651,6 +750,7 @@ class CaseManagementTests(unittest.TestCase):
                     "--plugins", "maigret", "sherlock", "--dry-run",
                 ],
                 [str(cli), "case", "status", "cli-case", "--json"],
+                [str(cli), "case", "entities", "cli-case", "--json"],
                 [str(cli), "case", "report", "cli-case"],
             ]
             completed = []
@@ -667,6 +767,9 @@ class CaseManagementTests(unittest.TestCase):
             status = json.loads(completed[3].stdout)
             self.assertEqual(status["target_count"], 1)
             self.assertEqual(status["previewed_jobs"], 2)
+            entities = json.loads(completed[4].stdout)
+            self.assertEqual(entities["entity_count"], 1)
+            self.assertEqual(entities["entities"][0]["origin"], "seed")
             self.assertTrue((root / "cli-case" / "report.md").is_file())
 
     def test_case_rejects_unsafe_identifier_and_symlink(self):

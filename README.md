@@ -107,8 +107,12 @@ osint case create example-case \
 
 osint case add example-case username example_handle
 osint case add example-case email analyst@example.com
+osint case add example-case name "Example Person"
+osint case add example-case phone "+1 (555) 555-0100"
+osint case add example-case address "1 Example Way, Example City, NY"
 osint case run example-case --plugins maigret sherlock
 osint case status example-case
+osint case entities example-case
 osint case report example-case
 osint case report example-case --format all
 ```
@@ -130,6 +134,15 @@ copies that still require review before distribution.
 Normalized findings remain unverified leads. See
 [`docs/CASE-MANAGEMENT.md`](docs/CASE-MANAGEMENT.md) and
 [`docs/REPORTING.md`](docs/REPORTING.md).
+
+The v0.4 development line also exposes a versioned entity foundation. Name,
+phone, and address seeds can be added even when no current plugin consumes
+them, and `osint case entities` projects every case target into a canonical,
+provenance-linked seed entity. This is additive groundwork for later
+correlation and controlled recursive discovery; it does not infer identity or
+automatically pursue new targets.
+See [`docs/ENTITY-MODEL.md`](docs/ENTITY-MODEL.md) for the versioned contract
+and forward-compatibility rules.
 
 ## Modular plugin system
 
