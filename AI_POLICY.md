@@ -70,6 +70,9 @@ authorizes. It must:
 7. Require hosted checks to pass before merging.
 8. Verify the resulting state on `main`.
 9. Follow every sequential release gate before tagging or publishing.
+10. Complete and verify the post-publication administrative closeout, including
+    the Discussions announcement, changelog link, repository documentation,
+    and applicable wiki updates.
 
 An authorized AI may create or merge changes when LizardPope1101 grants that
 authority for the stated task. That authority does not extend to unrelated
@@ -108,6 +111,8 @@ corrective patches and renewed automated and live validation before tagging.
 
 An AI must not treat a merge as a release, tag an unvalidated commit, bypass a
 failed check, suppress a failed result, or publish before required gates pass.
+After publication, it must not declare the release process complete until the
+required announcement and documentation closeout has been verified.
 
 ## Security, privacy, and OSINT data
 
