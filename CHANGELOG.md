@@ -25,6 +25,8 @@ stable release, minor versions may include breaking changes.
   SWIG, and Rust build dependencies on supported Debian and Ubuntu systems.
 - Use an isolated lxml 5.x compatibility overlay for SpiderFoot on Python 3.13
   and newer while preserving upstream requirements on older interpreters.
+- Launch SpiderFoot from its application directory so relative templates and
+  static assets resolve regardless of the operator's current directory.
 
 ## 0.3.0 - 2026-07-28
 
