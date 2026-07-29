@@ -315,6 +315,11 @@ class ExecutionTests(unittest.TestCase):
             self.assertTrue(second.is_dir())
             self.assertEqual((root.stat().st_mode & 0o777), 0o700)
 
+    def test_batch_run_directory_uses_utc_identifier(self):
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = osint_forge.create_run_directory(Path(temp), "utc")
+            self.assertRegex(run_dir.name, r"^\d{8}T\d{6}Z-utc$")
+
     def test_batch_executes_matching_plugins_and_writes_summary(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -365,6 +370,13 @@ class ExecutionTests(unittest.TestCase):
                 ((run_dirs[0] / "summary.json").stat().st_mode & 0o777),
                 0o600,
             )
+            for path in run_dirs[0].rglob("*"):
+                expected = 0o700 if path.is_dir() else 0o600
+                self.assertEqual(
+                    (path.stat().st_mode & 0o777),
+                    expected,
+                    f"unexpected permissions for {path}",
+                )
 
     def test_batch_without_matching_jobs_leaves_no_run_artifacts(self):
         with tempfile.TemporaryDirectory() as temp:

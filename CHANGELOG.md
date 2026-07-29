@@ -15,6 +15,8 @@ stable release, minor versions may include breaking changes.
 - Flush lifecycle headings before child-process output when logs are piped.
 - Enforce an owner-only umask for files and directories created by upstream
   adapter processes inside case output.
+- Enforce owner-only permissions on every intermediate batch output directory.
+- Use UTC batch run identifiers consistent with case and provenance timestamps.
 
 ## 0.3.0 - 2026-07-28
 
