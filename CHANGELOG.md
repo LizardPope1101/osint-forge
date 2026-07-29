@@ -7,6 +7,28 @@ stable release, minor versions may include breaking changes.
 
 ## Unreleased
 
+### Added
+
+- Versioned normalized finding and report contracts for all case-capable
+  plugins.
+- Deterministic JSON, Markdown, HTML, and CSV case reports linked to preserved
+  raw evidence.
+- Analyst confidence and note annotations through `osint case annotate`.
+- Conservative `--shareable` report redaction.
+
+### Changed
+
+- Batch plugins now declare plugin-owned normalizers, and successful case jobs
+  rerun when their plugin contract version changes.
+- Reports retain completed, failed, and previewed outcomes and surface
+  normalization errors instead of silently dropping them.
+
+### Security
+
+- Validate normalizer and report paths inside their plugin, raw-output, and
+  case boundaries; reject symbolic-link traversal.
+- Write reports and analyst reviews with owner-only permissions.
+
 ## 0.3.1 - 2026-07-29
 
 ### Security

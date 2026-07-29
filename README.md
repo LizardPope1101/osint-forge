@@ -110,6 +110,7 @@ osint case add example-case email analyst@example.com
 osint case run example-case --plugins maigret sherlock
 osint case status example-case
 osint case report example-case
+osint case report example-case --format all
 ```
 
 Case data defaults to `~/OSINT-Cases/<case-id>/`. Metadata, targets, raw tool
@@ -118,10 +119,17 @@ append-only activity log are stored with owner-only permissions. Re-running
 `osint case run` skips successful jobs and retries failed or missing jobs.
 Use `--rerun` to execute successful jobs again.
 
-The generated Markdown report is an execution summary linked to preserved raw
-output; it does not promote unverified tool output to a finding. See
-[`docs/CASE-MANAGEMENT.md`](docs/CASE-MANAGEMENT.md) for the directory schema,
-resume behavior, and safety model.
+The default Markdown report remains available at `report.md`. On the v0.4
+development line, `--format all` also produces a versioned JSON master report,
+HTML report, and CSV findings summary. Findings retain target, plugin, command,
+run, timestamp, exit-status, source-file, and raw-output provenance. Use
+`osint case findings` for stable finding IDs and `osint case annotate` for
+confidence or analyst notes. `--shareable` creates conservatively redacted
+copies that still require review before distribution.
+
+Normalized findings remain unverified leads. See
+[`docs/CASE-MANAGEMENT.md`](docs/CASE-MANAGEMENT.md) and
+[`docs/REPORTING.md`](docs/REPORTING.md).
 
 ## Modular plugin system
 
@@ -133,12 +141,14 @@ plugins/<tool>/
 ├── install.sh
 ├── update.sh
 ├── remove.sh
-└── doctor.sh
+├── doctor.sh
+└── normalize.py
 ```
 
 The manifest declares categories, commands, supported target types, lifecycle
-scripts, root requirements, and target adapters. Adapter commands are argument
-arrays rather than interpolated shell strings.
+scripts, root requirements, target adapters, and (for batch plugins) a
+normalizer. Adapter commands are argument arrays rather than interpolated shell
+strings.
 
 Validate the complete plugin contract without executing a plugin:
 

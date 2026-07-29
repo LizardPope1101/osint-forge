@@ -1,0 +1,10 @@
+{
+  "Example Found": {
+    "status": "Claimed",
+    "url": "https://social.example/example_handle"
+  },
+  "Example Missing": {
+    "status": "Not found",
+    "url": "https://missing.example/example_handle"
+  }
+}

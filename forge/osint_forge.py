@@ -19,7 +19,12 @@ import tempfile
 import time
 from typing import Any, Iterable
 
-__version__ = "0.3.1"
+try:
+    from . import reporting
+except ImportError:
+    import reporting
+
+__version__ = "0.4.0-dev"
 
 SYSTEM_ROOT = Path("/usr/local/share/osint-forge")
 STATE_ROOT = Path.home() / ".local/state/osint-forge"
@@ -465,6 +470,28 @@ def validate_plugin_directory(plugin_dir: Path) -> tuple[list[str], list[str]]:
                 f"{plugin_dir.name}: batch plugin is missing adapters for: "
                 + ", ".join(missing_adapters)
             )
+        normalizer = manifest.get("normalizer")
+        if not isinstance(normalizer, str) or not normalizer:
+            errors.append(
+                f"{plugin_dir.name}: batch plugin must define a normalizer"
+            )
+        else:
+            try:
+                normalizer_path = resolve_plugin_file(plugin_dir, normalizer)
+            except ValueError as exc:
+                errors.append(
+                    f"{plugin_dir.name}: invalid normalizer {normalizer!r}: {exc}"
+                )
+            else:
+                if normalizer_path.is_symlink():
+                    errors.append(
+                        f"{plugin_dir.name}: normalizer cannot be a symbolic link: "
+                        f"{normalizer}"
+                    )
+                elif not normalizer_path.is_file():
+                    errors.append(
+                        f"{plugin_dir.name}: missing normalizer {normalizer}"
+                    )
     return errors, warnings
 
 
@@ -1041,6 +1068,7 @@ def cmd_case_run(args: argparse.Namespace) -> int:
             not args.rerun
             and prior.get("status") == "completed"
             and prior.get("exit_code") == 0
+            and prior.get("plugin_version") == manifest["plugin_version"]
         ):
             skipped.append(identifier)
             continue
@@ -1284,97 +1312,158 @@ def cmd_case_status(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_case_report(args: argparse.Namespace) -> int:
-    path, metadata = load_case(args.case)
-    status = case_status_data(metadata)
-    if args.output:
-        requested = args.output.expanduser()
-        output = (
-            requested.resolve()
-            if requested.is_absolute()
-            else (path / requested).resolve()
-        )
-    else:
-        output = path / "report.md"
+def build_case_report(path: Path, metadata: dict[str, Any]) -> dict[str, Any]:
+    return reporting.build_report(path, metadata, catalog(), __version__)
+
+
+def safe_report_output(path: Path, requested: Path) -> Path:
+    expanded = requested.expanduser()
+    candidate = expanded if expanded.is_absolute() else path / expanded
+    try:
+        lexical_relative = candidate.absolute().relative_to(path)
+    except ValueError:
+        lexical_relative = None
+    if lexical_relative is not None:
+        current = path
+        for part in lexical_relative.parts:
+            current /= part
+            if current.is_symlink():
+                raise SystemExit(
+                    f"Report output cannot use a symbolic link: {current}"
+                )
+    output = (
+        expanded.resolve()
+        if expanded.is_absolute()
+        else (path / expanded).resolve()
+    )
     if not output.is_relative_to(path):
         raise SystemExit("Report output must remain inside the case directory.")
     reserved_files = {path / "case.json", path / "activity.jsonl"}
-    if output in reserved_files or output.is_relative_to(path / "runs"):
-        raise SystemExit("Report output cannot replace reserved case records.")
-    if output.exists() and output != path / "report.md" and not args.force:
-        raise SystemExit(
-            f"Report output already exists: {output}; use --force to replace it."
-        )
-
-    def markdown(value: Any) -> str:
-        return (
-            str(value)
-            .replace("\\", "\\\\")
-            .replace("|", "\\|")
-            .replace("`", "&#96;")
-            .replace("\r", " ")
-            .replace("\n", " ")
-        )
-
-    lines = [
-        f"# OSINT Forge Case: {markdown(metadata['id'])}",
-        "",
-        f"- **Schema:** {metadata['schema']}",
-        f"- **Purpose:** {markdown(metadata['purpose'])}",
-        f"- **Authorization scope:** {markdown(metadata['authorization_scope'])}",
-        f"- **Created:** {markdown(metadata['created_at'])}",
-        f"- **Updated:** {markdown(metadata['updated_at'])}",
-        "",
-        "## Targets",
-        "",
-        "| Type | Target | Added |",
-        "|---|---|---|",
-    ]
-    for target in metadata["targets"]:
-        lines.append(
-            f"| {markdown(target['type'])} | `{markdown(target['value'])}` | "
-            f"{markdown(target['added_at'])} |"
-        )
-    lines.extend([
-        "",
-        "## Execution status",
-        "",
-        f"- Completed jobs: {status['completed_jobs']}",
-        f"- Failed jobs: {status['failed_jobs']}",
-        "",
-        "| Plugin | Target ID | Status | Exit | Raw output |",
-        "|---|---|---|---:|---|",
-    ])
-    for state in sorted(
-        metadata["jobs"].values(),
-        key=lambda item: (item.get("plugin", ""), item.get("target_id", "")),
+    reserved_directories = (path / "runs", path / "findings")
+    if (
+        output in reserved_files
+        or any(output.is_relative_to(directory) for directory in reserved_directories)
     ):
-        raw = state.get("output", "")
-        raw_link = (
-            Path(os.path.relpath(path / raw, output.parent)).as_posix()
-            if raw
-            else ""
+        raise SystemExit("Report output cannot replace reserved case records.")
+    return output
+
+
+def cmd_case_report(args: argparse.Namespace) -> int:
+    path, metadata = load_case(args.case)
+    requested_format = getattr(args, "format", "markdown")
+    shareable = getattr(args, "shareable", False)
+    formats = (
+        ["markdown", "json", "html", "csv"]
+        if requested_format == "all"
+        else [requested_format]
+    )
+    if args.output and len(formats) != 1:
+        raise SystemExit("--output can only be used with one report format.")
+    prefix = "shareable-" if shareable else ""
+    defaults = {
+        "markdown": path / f"{prefix}report.md",
+        "json": path / f"{prefix}report.json",
+        "html": path / f"{prefix}report.html",
+        "csv": path / f"{prefix}findings.csv",
+    }
+    outputs = {
+        report_format: (
+            safe_report_output(path, args.output)
+            if args.output
+            else defaults[report_format]
         )
-        lines.append(
-            f"| {markdown(state.get('plugin', ''))} | "
-            f"`{markdown(state.get('target_id', ''))}` | "
-            f"{markdown(state.get('status', ''))} | "
-            f"{markdown(state.get('exit_code', ''))} | "
-            f"[preserved output]({raw_link}) |"
-        )
-    lines.extend([
-        "",
-        "> This report summarizes execution records. Raw tool output is not a "
-        "verified finding. Validate every lead independently.",
-        "",
-    ])
-    write_private_text(output, "\n".join(lines))
+        for report_format in formats
+    }
+    for report_format, output in outputs.items():
+        is_default = output == defaults[report_format]
+        if output.exists() and not is_default and not args.force:
+            raise SystemExit(
+                f"Report output already exists: {output}; use --force to replace it."
+            )
+
+    report = build_case_report(path, metadata)
+    if shareable:
+        report = reporting.redact_report(report)
+    renderers = {
+        "markdown": lambda output: reporting.render_markdown(report, output, path),
+        "json": lambda output: reporting.render_json(report),
+        "html": lambda output: reporting.render_html(report, output, path),
+        "csv": lambda output: reporting.render_csv(report),
+    }
+    for report_format, output in outputs.items():
+        write_private_text(output, renderers[report_format](output))
+        print(f"Report ({report_format}): {output}")
     append_case_activity(
         path,
         "report_generated",
-        output=str(output.relative_to(path)) if output.is_relative_to(path) else str(output),
+        formats=formats,
+        shareable=shareable,
+        outputs=[str(output.relative_to(path)) for output in outputs.values()],
     )
-    print(f"Report: {output}")
+    if report["normalization_errors"]:
+        print(
+            f"WARNING: report contains "
+            f"{len(report['normalization_errors'])} normalization error(s).",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+def cmd_case_findings(args: argparse.Namespace) -> int:
+    path, metadata = load_case(args.case)
+    report = build_case_report(path, metadata)
+    if args.json:
+        print(json.dumps(report["findings"], indent=2, sort_keys=True))
+    elif not report["findings"]:
+        print("No normalized findings.")
+    else:
+        for finding in report["findings"]:
+            value = f": {finding['value']}" if finding["value"] is not None else ""
+            print(
+                f"{finding['id']}  {finding['confidence']:<10} "
+                f"{finding['title']}{value}"
+            )
+    return 1 if report["normalization_errors"] else 0
+
+
+def cmd_case_annotate(args: argparse.Namespace) -> int:
+    path, metadata = load_case(args.case)
+    report = build_case_report(path, metadata)
+    known = {finding["id"] for finding in report["findings"]}
+    if args.finding not in known:
+        raise SystemExit(f"Unknown finding in {args.case}: {args.finding}")
+    if args.confidence is None and args.note is None and not args.clear_note:
+        raise SystemExit("Specify --confidence, --note, or --clear-note.")
+    reviews_dir = path / "findings"
+    secure_case_directory(reviews_dir, path)
+    reviews_path = reviews_dir / "reviews.json"
+    reviews = reporting.load_reviews(reviews_path)
+    review = reviews.get(
+        args.finding,
+        {"confidence": "unverified", "note": None, "updated_at": now()},
+    )
+    if args.confidence is not None:
+        review["confidence"] = args.confidence
+    if args.note is not None:
+        review["note"] = args.note
+    if args.clear_note:
+        review["note"] = None
+    review["updated_at"] = now()
+    reviews[args.finding] = review
+    write_private_json(
+        reviews_path,
+        {"schema": reporting.REVIEW_SCHEMA, "reviews": reviews},
+    )
+    save_case(path, metadata)
+    append_case_activity(
+        path,
+        "finding_annotated",
+        finding_id=args.finding,
+        confidence=review["confidence"],
+        note_present=review["note"] is not None,
+    )
+    print(f"Annotated finding: {args.finding}")
     return 0
 
 
@@ -1523,11 +1612,38 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_case_status)
 
-    p = cs.add_parser("report", help="write a provenance-linked Markdown summary")
+    p = cs.add_parser("report", help="write normalized provenance-linked reports")
     p.add_argument("case")
+    p.add_argument(
+        "--format",
+        choices=("markdown", "json", "html", "csv", "all"),
+        default="markdown",
+    )
+    p.add_argument(
+        "--shareable",
+        action="store_true",
+        help="redact targets, raw paths, commands, values, and analyst notes",
+    )
     p.add_argument("-o", "--output", type=Path)
     p.add_argument("--force", action="store_true", help="replace a custom report file")
     p.set_defaults(func=cmd_case_report)
+
+    p = cs.add_parser("findings", help="list normalized findings for a case")
+    p.add_argument("case")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_case_findings)
+
+    p = cs.add_parser("annotate", help="set confidence or an analyst note")
+    p.add_argument("case")
+    p.add_argument("finding")
+    p.add_argument(
+        "--confidence",
+        choices=sorted(reporting.CONFIDENCE_LEVELS),
+    )
+    note_group = p.add_mutually_exclusive_group()
+    note_group.add_argument("--note")
+    note_group.add_argument("--clear-note", action="store_true")
+    p.set_defaults(func=cmd_case_annotate)
 
     return parser
 
