@@ -23,6 +23,8 @@ stable release, minor versions may include breaking changes.
   owner-only launcher policy on fresh installs and updates.
 - Provision SpiderFoot's native compiler, Python, XML/XSLT, SSL/FFI, image,
   SWIG, and Rust build dependencies on supported Debian and Ubuntu systems.
+- Use an isolated lxml 5.x compatibility overlay for SpiderFoot on Python 3.13
+  and newer while preserving upstream requirements on older interpreters.
 
 ## 0.3.0 - 2026-07-28
 

@@ -6,6 +6,7 @@ import contextlib
 import io
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -1070,6 +1071,130 @@ class ShellScriptTests(unittest.TestCase):
                 content,
             )
             self.assertIn("install_spiderfoot_build_dependencies", content)
+
+    def test_spiderfoot_python_313_requirements_overlay(self):
+        plugin = osint_forge.SOURCE_ROOT / "plugins" / "spiderfoot"
+        helper = plugin / "requirements-compat.sh"
+        for lifecycle in ("install.sh", "update.sh"):
+            content = (plugin / lifecycle).read_text(encoding="utf-8")
+            self.assertIn(
+                'source "${OSINT_FORGE_PLUGIN_DIR}/requirements-compat.sh"',
+                content,
+            )
+            self.assertIn("spiderfoot_requirements_file", content)
+
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            upstream = base / "requirements.txt"
+            original = "requests>=2,<3\nlxml>=4.9.2,<5\npyyaml>=6,<7\n"
+            upstream.write_text(original, encoding="utf-8")
+            python313 = base / "python313"
+            python313.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            python313.chmod(0o755)
+
+            command = (
+                f"source {shlex.quote(str(helper))}\n"
+                f"spiderfoot_requirements_file {shlex.quote(str(base))} "
+                f"{shlex.quote(str(python313))}\n"
+            )
+            completed = subprocess.run(
+                ["bash", "-c", command],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            overlay = Path(completed.stdout.strip())
+            self.assertEqual(overlay, base / ".osint-forge-requirements.txt")
+            self.assertEqual(upstream.read_text(encoding="utf-8"), original)
+            self.assertEqual(
+                overlay.read_text(encoding="utf-8"),
+                "requests>=2,<3\nlxml>=5.3,<6\npyyaml>=6,<7\n",
+            )
+            self.assertEqual(overlay.stat().st_mode & 0o777, 0o644)
+
+    def test_spiderfoot_older_python_uses_upstream_requirements(self):
+        plugin = osint_forge.SOURCE_ROOT / "plugins" / "spiderfoot"
+        helper = plugin / "requirements-compat.sh"
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            upstream = base / "requirements.txt"
+            upstream.write_text("lxml>=4.9.2,<5\n", encoding="utf-8")
+            python312 = base / "python312"
+            python312.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+            python312.chmod(0o755)
+            command = (
+                f"source {shlex.quote(str(helper))}\n"
+                f"spiderfoot_requirements_file {shlex.quote(str(base))} "
+                f"{shlex.quote(str(python312))}\n"
+            )
+            completed = subprocess.run(
+                ["bash", "-c", command],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(Path(completed.stdout.strip()), upstream)
+            self.assertFalse((base / ".osint-forge-requirements.txt").exists())
+
+    def test_spiderfoot_requirements_overlay_dry_run_does_not_write(self):
+        plugin = osint_forge.SOURCE_ROOT / "plugins" / "spiderfoot"
+        helper = plugin / "requirements-compat.sh"
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            (base / "requirements.txt").write_text(
+                "lxml>=4.9.2,<5\n",
+                encoding="utf-8",
+            )
+            python313 = base / "python313"
+            python313.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            python313.chmod(0o755)
+            command = (
+                "dry_run=1\n"
+                f"source {shlex.quote(str(helper))}\n"
+                f"spiderfoot_requirements_file {shlex.quote(str(base))} "
+                f"{shlex.quote(str(python313))}\n"
+            )
+            completed = subprocess.run(
+                ["bash", "-c", command],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(
+                Path(completed.stdout.strip()),
+                base / ".osint-forge-requirements.txt",
+            )
+            self.assertFalse((base / ".osint-forge-requirements.txt").exists())
+
+    def test_spiderfoot_requirements_overlay_fails_closed(self):
+        plugin = osint_forge.SOURCE_ROOT / "plugins" / "spiderfoot"
+        helper = plugin / "requirements-compat.sh"
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            (base / "requirements.txt").write_text(
+                "requests>=2,<3\n",
+                encoding="utf-8",
+            )
+            python313 = base / "python313"
+            python313.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            python313.chmod(0o755)
+            command = (
+                f"source {shlex.quote(str(helper))}\n"
+                f"spiderfoot_requirements_file {shlex.quote(str(base))} "
+                f"{shlex.quote(str(python313))}\n"
+            )
+            completed = subprocess.run(
+                ["bash", "-c", command],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("Expected exactly one lxml requirement", completed.stderr)
+            self.assertFalse((base / ".osint-forge-requirements.txt").exists())
 
     def test_missing_dependency_does_not_fail_dry_run(self):
         common = osint_forge.SOURCE_ROOT / "scripts" / "plugin-common.sh"
