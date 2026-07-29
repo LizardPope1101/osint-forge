@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "plugin_version": "1",
+  "plugin_version": "2",
   "id": "nmap",
   "name": "Nmap",
   "description": "Authorized network discovery and service inventory.",
@@ -21,6 +21,7 @@
     "ip"
   ],
   "batch": true,
+  "normalizer": "normalize.py",
   "lifecycle": {
     "install": "install.sh",
     "update": "update.sh",

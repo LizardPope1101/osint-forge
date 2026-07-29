@@ -6,7 +6,7 @@ set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-python3 -m py_compile forge/osint_forge.py
+python3 -m py_compile forge/*.py plugins/*/normalize.py
 python3 -m unittest discover -s tests -v
 ./bin/osint forge validate
 bash -n bootstrap.sh bin/osint scripts/*.sh plugins/*/*.sh docs/plugin-template/*.sh

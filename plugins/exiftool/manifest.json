@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "plugin_version": "1",
+  "plugin_version": "2",
   "id": "exiftool",
   "name": "ExifTool",
   "description": "Extract metadata from images and documents.",
@@ -21,6 +21,7 @@
     "file"
   ],
   "batch": true,
+  "normalizer": "normalize.py",
   "lifecycle": {
     "install": "install.sh",
     "update": "update.sh",

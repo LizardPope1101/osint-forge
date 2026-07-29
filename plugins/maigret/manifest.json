@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "plugin_version": "1",
+  "plugin_version": "2",
   "id": "maigret",
   "name": "Maigret",
   "description": "Username search with structured reports.",
@@ -20,6 +20,7 @@
     "username"
   ],
   "batch": true,
+  "normalizer": "normalize.py",
   "lifecycle": {
     "install": "install.sh",
     "update": "update.sh",

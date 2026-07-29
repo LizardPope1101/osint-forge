@@ -23,6 +23,11 @@ material that you do not have the right to distribute.
   pull requests.
 - Preserve raw evidence, provenance, owner-only permissions, resumability, and
   schema migration behavior when changing case or reporting features.
+- Batch plugins must include a deterministic, standard-library-only normalizer
+  and synthetic fixtures covering positive, negative, malformed, and missing
+  output. Normalizers cannot use the network or modify raw evidence.
+- Reporting changes must verify traceability, explicit failed and previewed
+  outcomes, cross-format agreement, redaction, and deterministic regeneration.
 - Include or update documentation when behavior changes.
 - Test lifecycle operations with `--dry-run` before exercising them on a host.
 

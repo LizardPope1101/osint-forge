@@ -107,6 +107,25 @@ class CatalogTests(unittest.TestCase):
             errors, _ = osint_forge.validate_plugin_directory(plugin_dir)
             self.assertTrue(any("missing adapters for: username" in error for error in errors))
 
+    def test_batch_plugin_requires_safe_existing_normalizer(self):
+        with tempfile.TemporaryDirectory() as temp:
+            plugin_dir = Path(temp) / "example"
+            shutil.copytree(
+                osint_forge.SOURCE_ROOT / "plugins" / "maigret",
+                plugin_dir,
+            )
+            manifest_path = plugin_dir / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["id"] = "example"
+            manifest["normalizer"] = "../outside.py"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            errors, _ = osint_forge.validate_plugin_directory(plugin_dir)
+            self.assertTrue(any("invalid normalizer" in error for error in errors))
+            manifest["normalizer"] = "missing.py"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            errors, _ = osint_forge.validate_plugin_directory(plugin_dir)
+            self.assertTrue(any("missing normalizer" in error for error in errors))
+
     def test_catalog_loading_rejects_invalid_contract(self):
         with tempfile.TemporaryDirectory() as temp:
             plugin_dir = Path(temp) / "example"
@@ -529,7 +548,7 @@ class ExecutionTests(unittest.TestCase):
 
 class CliTests(unittest.TestCase):
     def test_version_command(self):
-        self.assertEqual(osint_forge.__version__, "0.3.1")
+        self.assertEqual(osint_forge.__version__, "0.4.0-dev")
 
     def test_validate_command_succeeds(self):
         rc = osint_forge.cmd_validate(argparse.Namespace(json=False))
@@ -870,6 +889,53 @@ class CaseManagementTests(unittest.TestCase):
             self.assertEqual(
                 {state["status"] for state in metadata["jobs"].values()},
                 {"completed"},
+            )
+
+    def test_completed_job_reruns_after_plugin_contract_upgrade(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "cases"
+            case = self.create_case(root)
+            self.add_target(root)
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}):
+                osint_forge.cmd_case_run(
+                    self.run_args(plugins=["maigret"], jobs=1, dry_run=True)
+                )
+            metadata_path = case / "case.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            state = next(iter(metadata["jobs"].values()))
+            state["status"] = "completed"
+            state["plugin_version"] = "1"
+            osint_forge.write_private_json(metadata_path, metadata)
+
+            def upgraded_run(plugin, target_type, value, output, dry_run):
+                output.mkdir(parents=True, exist_ok=True)
+                osint_forge.write_private_json(
+                    output / "status.json",
+                    {
+                        "plugin": plugin,
+                        "target_type": target_type,
+                        "target": value,
+                        "command": [plugin, value],
+                        "exit_code": 0,
+                        "completed_at": osint_forge.now(),
+                    },
+                )
+                return 0
+
+            with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}), \
+                 mock.patch.object(osint_forge, "is_installed", return_value=True), \
+                 mock.patch.object(
+                     osint_forge, "run_adapter", side_effect=upgraded_run
+                 ) as run:
+                rc = osint_forge.cmd_case_run(
+                    self.run_args(plugins=["maigret"], jobs=1)
+                )
+            self.assertEqual(rc, 0)
+            self.assertEqual(run.call_count, 1)
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                next(iter(metadata["jobs"].values()))["plugin_version"],
+                "2",
             )
 
     def test_internal_job_error_is_recorded_and_resumable(self):

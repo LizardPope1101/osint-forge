@@ -8,7 +8,8 @@ plugins/example/
 ├── install.sh
 ├── update.sh
 ├── remove.sh
-└── doctor.sh
+├── doctor.sh
+└── normalize.py
 ```
 
 The plugin directory name and `manifest.json` `id` must match. IDs use
@@ -31,6 +32,7 @@ lowercase letters, numbers, and single hyphens between components.
   "commands": ["example"],
   "supports": ["username"],
   "batch": true,
+  "normalizer": "normalize.py",
   "lifecycle": {
     "install": "install.sh",
     "update": "update.sh",
@@ -75,8 +77,44 @@ Core target types are:
 
 Adapters are argument arrays, not shell strings. This prevents shell interpolation of untrusted target values.
 Every target listed in `supports` must have an adapter when `batch` is `true`.
+Every batch plugin must declare a `normalizer`. Its path must be a regular file
+inside the plugin directory and cannot be a symbolic link.
 Lifecycle script paths must be relative files contained within the plugin
 directory.
+
+## Normalizer contract
+
+Core invokes a normalizer with the current Python interpreter and one argument:
+the absolute raw-output directory for a completed job. The working directory is
+also that raw-output directory. A normalizer only reads preserved output and
+emits one JSON object:
+
+```json
+{
+  "schema": 1,
+  "findings": [
+    {
+      "kind": "username_profile",
+      "category": "usernames",
+      "title": "Possible username profile on Example",
+      "value": "https://social.example/example_handle",
+      "attributes": {"status": "Claimed"},
+      "source_file": "results.json"
+    }
+  ]
+}
+```
+
+`kind`, `title`, and `source_file` are required non-empty strings. `value` is a
+string or null. `attributes` is a JSON object. `source_file` is relative to raw
+output, must exist, and cannot traverse or use symbolic links outside that
+boundary. Core adds finding ID, target, plugin, command, timestamps, run,
+outcome, confidence, notes, and raw-output provenance.
+
+Normalizers must be deterministic, standard-library-only, network-free,
+read-only, and consistently sorted. They should fail nonzero when required
+structured output is missing or malformed. Changes require synthetic positive
+and negative fixtures.
 
 ## Lifecycle environment
 

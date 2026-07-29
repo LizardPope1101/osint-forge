@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "plugin_version": "1",
+  "plugin_version": "2",
   "id": "ghunt",
   "name": "GHunt",
   "description": "Google-account-focused OSINT framework.",
@@ -20,6 +20,7 @@
     "email"
   ],
   "batch": true,
+  "normalizer": "normalize.py",
   "lifecycle": {
     "install": "install.sh",
     "update": "update.sh",

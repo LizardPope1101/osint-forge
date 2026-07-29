@@ -46,12 +46,15 @@ Inspect progress and create a local summary:
 osint case status example-case
 osint case status example-case --json
 osint case report example-case
+osint case report example-case --format all
+osint case report example-case --format all --shareable
 ```
 
-The default `report.md` can be regenerated in place. A custom `--output` must
-remain inside the case directory and will not replace an existing file unless
-`--force` is supplied. Reserved metadata, activity, and raw-run paths can never
-be used as report destinations.
+The default `report.md` can be regenerated in place. `--format` accepts
+`markdown`, `json`, `html`, `csv`, or `all`. A custom `--output` is available
+for one format, must remain inside the case directory, and will not replace an
+existing file unless `--force` is supplied. Reserved metadata, review, and
+raw-run paths cannot be used as report destinations.
 
 ## Resume behavior
 
@@ -77,8 +80,12 @@ different root.
 ├── case.json
 ├── activity.jsonl
 ├── report.md
+├── report.json
+├── report.html
+├── findings.csv
 ├── notes/
 ├── findings/
+│   └── reviews.json
 └── runs/
     └── <timestamp>/
         ├── run.json
@@ -113,10 +120,27 @@ Case directories are mode `0700`; case-owned files are mode `0600`. Case IDs
 cannot contain path separators, case directories cannot be symbolic links,
 and generated reports cannot escape their case directory.
 
-The report command produces a Markdown execution summary linked to raw output.
-It intentionally warns that tool output is not automatically a verified
-finding. Normalized findings and redacted export formats are planned for
-v0.4.
+The report command normalizes supported tool output into a common, versioned
+finding contract. It preserves every outcome—including failures and dry-run
+previews—and links each finding to its exact raw source. Normalization failures
+remain visible and cause a nonzero exit after available reports are written.
+
+List and review findings with:
+
+```bash
+osint case findings example-case
+osint case annotate example-case FINDING_ID \
+  --confidence high \
+  --note "Confirmed against an operator-owned profile."
+```
+
+Confidence values are `unverified`, `low`, `medium`, and `high`. Reviews are
+stored separately in `findings/reviews.json` and never modify raw output.
+
+Shareable reports use conservative structure-only redaction. Targets, commands,
+paths, values, notes, errors, and stable case/run/job identifiers are removed.
+Human review before distribution is still required. See
+[Normalized Reporting](REPORTING.md).
 
 ## Schema compatibility
 
