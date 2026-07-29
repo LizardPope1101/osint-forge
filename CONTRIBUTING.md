@@ -46,7 +46,10 @@ connection to the repository or repository-integrated tooling.
   outcomes, cross-format agreement, redaction, and deterministic regeneration.
 - Include or update repository documentation when behavior changes. Defer
   release-specific wiki changes until live validation establishes the final
-  behavior, then publish them through the sequential release process.
+  behavior, then publish them through the sequential release process. Release
+  closeout must update every applicable repository document and wiki page and
+  announce the release in GitHub Discussions with a high-level overview and a
+  link to the versioned changelog.
 - Disclose material AI assistance in the pull request and personally review,
   understand, and accept responsibility for the submitted work.
 - Test lifecycle operations with `--dry-run` before exercising them on a host.
