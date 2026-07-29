@@ -1043,6 +1043,12 @@ class ShellScriptTests(unittest.TestCase):
                         f"/usr/local/bin/{plugin_id}",
                         content,
                     )
+        spiderfoot_launcher = (
+            osint_forge.SOURCE_ROOT / "plugins" / "spiderfoot" / "launcher.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn('application="/opt/osint-forge/spiderfoot"', spiderfoot_launcher)
+        self.assertIn('cd "$application"', spiderfoot_launcher)
+        self.assertIn("Unable to enter SpiderFoot application directory", spiderfoot_launcher)
 
     def test_spiderfoot_lifecycle_installs_native_build_dependencies(self):
         plugin = osint_forge.SOURCE_ROOT / "plugins" / "spiderfoot"
