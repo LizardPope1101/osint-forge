@@ -250,6 +250,50 @@ class ExecutionTests(unittest.TestCase):
             for filename in ("stdout.log", "stderr.log", "status.json"):
                 self.assertEqual(((output / filename).stat().st_mode & 0o777), 0o600)
 
+    def test_adapter_enforces_private_permissions_on_upstream_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            command = fake_bin / "artifact-writer"
+            command.write_text(
+                "#!/bin/sh\n"
+                "mkdir reports\n"
+                "touch reports/result.json\n",
+                encoding="utf-8",
+            )
+            command.chmod(0o755)
+            output = root / "out"
+            with mock.patch.object(osint_forge, "require_plugin") as require, \
+                 mock.patch.object(osint_forge, "is_installed", return_value=True), \
+                 mock.patch.dict(
+                     os.environ,
+                     {"PATH": f"{fake_bin}:{os.environ['PATH']}"},
+                 ):
+                require.return_value = (
+                    root,
+                    {
+                        "id": "example",
+                        "adapters": {
+                            "username": {
+                                "command": ["artifact-writer", "{target}"]
+                            }
+                        },
+                    },
+                )
+                rc = osint_forge.run_adapter(
+                    "example", "username", "alice", output, False
+                )
+            self.assertEqual(rc, 0)
+            self.assertEqual(
+                ((output / "reports").stat().st_mode & 0o777),
+                0o700,
+            )
+            self.assertEqual(
+                ((output / "reports" / "result.json").stat().st_mode & 0o777),
+                0o600,
+            )
+
     @unittest.skipUnless(hasattr(os, "O_NOFOLLOW"), "requires O_NOFOLLOW")
     def test_private_log_refuses_symbolic_link(self):
         with tempfile.TemporaryDirectory() as temp:

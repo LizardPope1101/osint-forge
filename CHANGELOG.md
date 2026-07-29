@@ -13,6 +13,8 @@ stable release, minor versions may include breaking changes.
   doctor, update, and removal checks agree with installed-plugin detection.
 - Configure pipx's user path during bootstrap for future login shells.
 - Flush lifecycle headings before child-process output when logs are piped.
+- Enforce an owner-only umask for files and directories created by upstream
+  adapter processes inside case output.
 
 ## 0.3.0 - 2026-07-28
 
