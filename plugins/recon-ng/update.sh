@@ -5,3 +5,4 @@ source "${OSINT_FORGE_ROOT}/scripts/plugin-common.sh"
 base="/opt/osint-forge/recon-ng"
 run git -C "$base" pull --ff-only
 run "$base/.venv/bin/pip" install -r "$base/REQUIREMENTS"
+run install -m 0755 "${OSINT_FORGE_PLUGIN_DIR}/launcher.sh" /usr/local/bin/recon-ng
