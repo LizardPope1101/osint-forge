@@ -529,7 +529,7 @@ class ExecutionTests(unittest.TestCase):
 
 class CliTests(unittest.TestCase):
     def test_version_command(self):
-        self.assertRegex(osint_forge.__version__, r"^\d+\.\d+\.\d+")
+        self.assertEqual(osint_forge.__version__, "0.3.1")
 
     def test_validate_command_succeeds(self):
         rc = osint_forge.cmd_validate(argparse.Namespace(json=False))

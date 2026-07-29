@@ -7,8 +7,27 @@ stable release, minor versions may include breaking changes.
 
 ## Unreleased
 
+## 0.3.1 - 2026-07-29
+
+### Security
+
+- Reject symbolic-link case paths, output directories, activity logs, and
+  private logs instead of following them.
+- Validate persisted case metadata, target records, job records, and derived
+  identifiers before using them.
+- Escape Markdown control characters from case metadata and tool records when
+  generating reports.
+- Refuse to replace or uninstall unrecognized framework directories and
+  launchers.
+
 ### Fixed
 
+- Wait for active case workers to settle after interruption before finalizing
+  provenance or cleaning temporary storage.
+- Report unreadable, missing, and non-UTF-8 batch inputs cleanly, and avoid
+  creating empty run artifacts when no installed plugin matches.
+- Treat stale installation records as uninstalled when the underlying command
+  is missing.
 - Add pipx's per-user binary directory to plugin lifecycle environments so
   doctor, update, and removal checks agree with installed-plugin detection.
 - Configure pipx's user path during bootstrap for future login shells.
