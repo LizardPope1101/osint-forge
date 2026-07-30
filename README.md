@@ -25,7 +25,7 @@ release.
 Clone the latest stable tag:
 
 ```bash
-git clone --branch v0.3.1 https://github.com/LizardPope1101/osint-forge.git
+git clone --branch v0.4.0 https://github.com/LizardPope1101/osint-forge.git
 cd osint-forge
 chmod +x bootstrap.sh
 ./bootstrap.sh
