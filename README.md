@@ -97,7 +97,8 @@ The batch engine discovers compatible installed plugins from their manifests.
 Results default to `~/OSINT-Cases/Batch-Runs/`. Framework state is stored
 consistently in `~/.local/state/osint-forge/`.
 Unknown names passed to `--plugins` are rejected instead of being silently
-ignored.
+ignored. Adapter and batch output paths reject symbolic links, including
+symbolic-link parent directories.
 
 ## Case management
 
