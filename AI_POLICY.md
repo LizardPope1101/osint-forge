@@ -95,19 +95,43 @@ advisory unless he approves or delegates the corresponding action. An AI must:
 - distinguish automated output from verified findings; and
 - leave security, licensing, governance, and release gates intact.
 
-Human review remains mandatory for security-sensitive changes, credentials and
-permissions, licensing decisions, vulnerability handling, live testing, and
-release readiness.
+Human authorization and accountability remain mandatory for
+security-sensitive changes, credentials and permissions, licensing decisions,
+vulnerability handling, live testing, and release readiness. LizardPope1101
+may personally perform a review or explicitly delegate defined testing,
+review, merge, and release actions to an authorized AI. Delegation does not
+permit the AI to expand its own scope or alter the policies governing its
+authority.
 
 ## Testing and releases
 
 AI assistance does not reduce the testing burden. Release candidates must
 complete every numbered gate in the authoritative wiki Release Process.
 
-Live release testing is AI-assisted and human-operated: the AI devises and
-furnishes controlled tests, the human runs them on the authorized Debian VM,
-and the human returns complete output for AI review. Defects require
-corrective patches and renewed automated and live validation before tagging.
+Live release testing may use either of two modes selected and authorized by
+LizardPope1101:
+
+- **Human-operated mode:** the AI devises and furnishes controlled tests, a
+  human runs them on the authorized Debian VM, and the human returns complete
+  output for AI review.
+- **Autonomous mode:** an owner-authorized AI runs controlled tests directly
+  on a dedicated testing VM and may perform only the repository, VM, patch,
+  merge, release, and closeout actions expressly included in its authorization.
+
+Autonomous mode is valid only when the VM runs a current stable Debian release;
+the tested commit and authorization scope are recorded; test data is synthetic,
+reserved, loopback, operator-owned, or explicitly authorized; commands,
+timestamps, versions, output, exit codes, defects, patches, reruns, and
+conclusions are preserved; and the agent fails closed on any missing access,
+failed gate, material uncertainty, or scope conflict. Evidence must be
+reviewable after the run and stored with owner-only permissions when it may
+contain sensitive operational detail.
+
+Autonomous execution does not reduce or replace any release gate. Defects
+require corrective patches and renewed automated and live validation before
+tagging. An AI may not approve a change to this policy, reinterpret its own
+authority, use real third-party personal data for testing, or attest a test it
+did not execute and verify.
 
 An AI must not treat a merge as a release, tag an unvalidated commit, bypass a
 failed check, suppress a failed result, or publish before required gates pass.
