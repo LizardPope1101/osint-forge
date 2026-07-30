@@ -17,8 +17,8 @@ import subprocess
 import sys
 from typing import Any
 
-REPORT_SCHEMA = 1
-NORMALIZER_SCHEMA = 1
+REPORT_SCHEMA = 2
+NORMALIZER_SCHEMAS = {1, 2}
 REVIEW_SCHEMA = 1
 CONFIDENCE_LEVELS = {"unverified", "low", "medium", "high"}
 MAX_NORMALIZER_OUTPUT = 16 * 1024 * 1024
@@ -103,6 +103,28 @@ def _finding_id(
     return f"finding-{hashlib.sha256(encoded).hexdigest()[:24]}"
 
 
+def _candidate_id(
+    plugin: str,
+    target_id: str,
+    source_file: str,
+    entity_type: str,
+    value: str,
+) -> str:
+    encoded = json.dumps(
+        {
+            "plugin": plugin,
+            "target_id": target_id,
+            "source_file": source_file,
+            "type": entity_type,
+            "value": value,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
+    return f"candidate-{hashlib.sha256(encoded).hexdigest()[:24]}"
+
+
 def load_reviews(path: Path) -> dict[str, dict[str, Any]]:
     if not path.exists():
         return {}
@@ -150,16 +172,16 @@ def normalize_job(
     state: dict[str, Any],
     status: dict[str, Any],
     reviews: dict[str, dict[str, Any]],
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     normalizer_name = manifest.get("normalizer")
     if not normalizer_name:
-        return []
+        return [], []
     output_relative = state.get("output")
     if not isinstance(output_relative, str) or not output_relative:
-        return []
+        return [], []
     output_dir = _case_child(case_path, output_relative, "raw-output path")
     if not output_dir.is_dir():
-        return []
+        return [], []
     normalizer = (plugin_dir / normalizer_name).resolve()
     if not normalizer.is_relative_to(plugin_dir.resolve()) or not normalizer.is_file():
         raise NormalizationError(
@@ -195,7 +217,7 @@ def normalize_job(
         ) from exc
     if (
         not isinstance(payload, dict)
-        or payload.get("schema") != NORMALIZER_SCHEMA
+        or payload.get("schema") not in NORMALIZER_SCHEMAS
         or not isinstance(payload.get("findings"), list)
     ):
         raise NormalizationError(
@@ -263,7 +285,68 @@ def normalize_job(
                 "raw_output": output_relative,
             },
         })
-    return normalized
+    candidates = []
+    raw_candidates = payload.get("candidates", [])
+    if payload.get("schema") == 1 and raw_candidates:
+        raise NormalizationError(
+            f"{manifest['id']}: schema 1 normalizer cannot emit candidates"
+        )
+    if not isinstance(raw_candidates, list):
+        raise NormalizationError(
+            f"{manifest['id']}: candidates must be an array"
+        )
+    emitted = set(manifest.get("entities", {}).get("emitted", []))
+    for index, candidate in enumerate(raw_candidates):
+        if not isinstance(candidate, dict):
+            raise NormalizationError(
+                f"{manifest['id']}: candidate {index} must be an object"
+            )
+        entity_type = candidate.get("type")
+        value = candidate.get("value")
+        source_file = candidate.get("source_file")
+        if (
+            not isinstance(entity_type, str)
+            or entity_type not in emitted
+            or not isinstance(value, str)
+            or not value.strip()
+            or not isinstance(source_file, str)
+            or not source_file.strip()
+        ):
+            raise NormalizationError(
+                f"{manifest['id']}: candidate {index} violates emitted entity contract"
+            )
+        source = _source_file(output_dir, source_file)
+        source_relative = str(source.relative_to(case_path))
+        clean_value = value.strip()
+        candidates.append({
+            "id": _candidate_id(
+                manifest["id"],
+                state.get("target_id", ""),
+                source_file,
+                entity_type,
+                clean_value,
+            ),
+            "type": entity_type,
+            "value": clean_value,
+            "classification": "extracted_observation",
+            "target": {
+                "id": state.get("target_id"),
+                "type": status.get("target_type"),
+                "value": status.get("target"),
+            },
+            "source": {
+                "plugin": manifest["id"],
+                "plugin_version": state.get("plugin_version"),
+                "framework_version": status.get("framework_version"),
+                "run_id": state.get("last_run"),
+                "command": status.get("command", []),
+                "started_at": status.get("started_at"),
+                "completed_at": state.get("completed_at"),
+                "source_file": source_relative,
+                "raw_output": output_relative,
+            },
+        })
+    return normalized, candidates
 
 
 def build_report(
@@ -278,6 +361,7 @@ def build_report(
     reviews = load_reviews(reviews_path)
     outcomes = []
     findings = []
+    candidates = []
     errors = []
     targets_by_id = {
         target["id"]: target for target in metadata["targets"]
@@ -351,11 +435,11 @@ def build_report(
             continue
         plugin_dir, manifest = plugin
         try:
-            findings.extend(
-                normalize_job(
-                    case_path, plugin_dir, manifest, state, status, reviews
-                )
+            normalized_findings, normalized_candidates = normalize_job(
+                case_path, plugin_dir, manifest, state, status, reviews
             )
+            findings.extend(normalized_findings)
+            candidates.extend(normalized_candidates)
         except NormalizationError as exc:
             errors.append({
                 "job_id": job_id,
@@ -366,6 +450,7 @@ def build_report(
     findings.sort(key=lambda item: (
         item["category"], item["kind"], item["title"], item["id"]
     ))
+    candidates.sort(key=lambda item: (item["type"], item["value"], item["id"]))
     target_ids = {target["id"] for target in metadata["targets"]}
     current_finding_ids = {finding["id"] for finding in findings}
     orphaned_reviews = sorted(set(reviews) - current_finding_ids)
@@ -390,6 +475,7 @@ def build_report(
             "failed_jobs": sum(item["status"] == "failed" for item in outcomes),
             "previewed_jobs": sum(item["status"] == "previewed" for item in outcomes),
             "finding_count": len(findings),
+            "candidate_count": len(candidates),
             "normalization_error_count": len(errors),
         },
         "targets": sorted(
@@ -398,6 +484,7 @@ def build_report(
         ),
         "outcomes": outcomes,
         "findings": findings,
+        "candidates": candidates,
         "normalization_errors": errors,
         "orphaned_review_ids": orphaned_reviews,
         "integrity": {
@@ -408,6 +495,12 @@ def build_report(
                 finding["source"]["source_file"]
                 and finding["source"]["raw_output"]
                 for finding in findings
+            ),
+            "all_candidates_traceable": all(
+                candidate["target"]["id"] in target_ids
+                and candidate["source"]["source_file"]
+                and candidate["source"]["raw_output"]
+                for candidate in candidates
             ),
         },
     }
@@ -470,6 +563,19 @@ def redact_report(report: dict[str, Any]) -> dict[str, Any]:
         finding["source"]["run_id"] = run_map.get(finding["source"]["run_id"])
         finding["source"]["source_file"] = None
         finding["source"]["raw_output"] = None
+    for index, candidate in enumerate(redacted["candidates"], 1):
+        candidate["id"] = f"candidate-{index:03d}"
+        candidate["value"] = "[redacted]"
+        candidate["target"]["id"] = target_map.get(
+            candidate["target"]["id"], "[redacted]"
+        )
+        candidate["target"]["value"] = "[redacted]"
+        candidate["source"]["command"] = (
+            ["[redacted]"] if candidate["source"]["command"] else []
+        )
+        candidate["source"]["run_id"] = run_map.get(candidate["source"]["run_id"])
+        candidate["source"]["source_file"] = None
+        candidate["source"]["raw_output"] = None
     redacted["normalization_errors"] = [
         {
             "job_id": job_map.get(item.get("job_id"), "[redacted]"),
@@ -480,6 +586,7 @@ def redact_report(report: dict[str, Any]) -> dict[str, Any]:
     ]
     redacted["orphaned_review_ids"] = []
     redacted["integrity"]["all_findings_traceable"] = False
+    redacted["integrity"]["all_candidates_traceable"] = False
     return redacted
 
 
@@ -531,6 +638,7 @@ def render_markdown(
         f"- Failed jobs: {summary['failed_jobs']}",
         f"- Previewed jobs: {summary['previewed_jobs']}",
         f"- Normalized findings: {summary['finding_count']}",
+        f"- Candidate observations: {summary['candidate_count']}",
         f"- Normalization errors: {summary['normalization_error_count']}",
         "",
         "## Targets",
@@ -586,6 +694,31 @@ def render_markdown(
             ),
             "",
         ])
+    lines.extend(["## Candidate observations", ""])
+    if not report["candidates"]:
+        lines.append("No candidate entities were extracted.")
+    else:
+        lines.extend([
+            "| ID | Type | Value | Source plugin | Target | Raw source |",
+            "|---|---|---|---|---|---|",
+        ])
+        for candidate in report["candidates"]:
+            source = candidate["source"]
+            source_link = _relative_link(
+                report_path, case_path, source["source_file"]
+            )
+            raw = (
+                f"[preserved source]({source_link})"
+                if source_link else "redacted or unavailable"
+            )
+            lines.append(
+                f"| `{_markdown(candidate['id'])}` | "
+                f"{_markdown(candidate['type'])} | "
+                f"`{_markdown(candidate['value'])}` | "
+                f"{_markdown(source['plugin'])} | "
+                f"`{_markdown(candidate['target']['id'])}` | {raw} |"
+            )
+    lines.append("")
     if report["normalization_errors"]:
         lines.extend(["## Normalization errors", ""])
         for error in report["normalization_errors"]:
@@ -624,6 +757,25 @@ def render_html(
             f"<td>{esc(outcome['status'])}</td>"
             f"<td>{esc(outcome['exit_code'])}</td>"
             f"<td>{esc(outcome['error'])}</td>"
+            f"<td>{raw}</td>"
+            "</tr>"
+        )
+    candidate_rows = []
+    for candidate in report["candidates"]:
+        source_link = _relative_link(
+            report_path, case_path, candidate["source"]["source_file"]
+        )
+        raw = (
+            f'<a href="{html.escape(source_link, quote=True)}">preserved source</a>'
+            if source_link else "redacted or unavailable"
+        )
+        candidate_rows.append(
+            "<tr>"
+            f"<td><code>{esc(candidate['id'])}</code></td>"
+            f"<td>{esc(candidate['type'])}</td>"
+            f"<td><code>{esc(candidate['value'])}</code></td>"
+            f"<td>{esc(candidate['source']['plugin'])}</td>"
+            f"<td><code>{esc(candidate['target']['id'])}</code></td>"
             f"<td>{raw}</td>"
             "</tr>"
         )
@@ -682,6 +834,7 @@ code {{ overflow-wrap: anywhere; }}
 <li>Completed: {summary['completed_jobs']}</li>
 <li>Failed: {summary['failed_jobs']}</li>
 <li>Findings: {summary['finding_count']}</li>
+<li>Candidate observations: {summary['candidate_count']}</li>
 <li>Normalization errors: {summary['normalization_error_count']}</li>
 </ul>
 <h2>Execution outcomes</h2>
@@ -696,6 +849,12 @@ code {{ overflow-wrap: anywhere; }}
 <th>Value</th><th>Confidence</th><th>Analyst note</th><th>Plugin</th>
 <th>Raw source</th></tr></thead>
 <tbody>{''.join(rows)}</tbody>
+</table>
+<h2>Candidate observations</h2>
+<table>
+<thead><tr><th>ID</th><th>Type</th><th>Value</th><th>Plugin</th>
+<th>Target</th><th>Raw source</th></tr></thead>
+<tbody>{''.join(candidate_rows)}</tbody>
 </table>
 {f'<h2>Normalization errors</h2><ul>{errors}</ul>' if errors else ''}
 <p class="warning">Normalized findings are unverified leads, not established facts.

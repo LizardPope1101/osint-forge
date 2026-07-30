@@ -19,7 +19,7 @@ lowercase letters, numbers, and single hyphens between components.
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "plugin_version": "1",
   "id": "example",
   "name": "Example Tool",
@@ -31,6 +31,10 @@ lowercase letters, numbers, and single hyphens between components.
   "tags": ["people", "batch"],
   "commands": ["example"],
   "supports": ["username"],
+  "entities": {
+    "accepted": ["username"],
+    "emitted": []
+  },
   "batch": true,
   "normalizer": "normalize.py",
   "lifecycle": {
@@ -75,24 +79,15 @@ Core target types are:
 A core target type is not necessarily supported by a current plugin. Plugins
 receive only types listed in their own `supports` and `adapters` contracts.
 
-## Entity-aware contract trajectory
+## Entity-aware contract
 
-The current schema 1 `supports` field declares accepted case target types.
-Under the committed [Roadmap to v1.0](ROADMAP.md), v0.5 will introduce a
-versioned contract that also declares candidate entity types a plugin
-normalizer can emit.
+Schema 2 retains `supports` for execution compatibility and adds `entities`.
+`entities.accepted` must be a sorted, unique copy of `supports`.
+`entities.emitted` is the sorted, unique set of entity types the normalizer may
+emit as candidate observations. Empty emission is explicit and valid.
 
-That future contract must:
-
-- remain explicit and machine-validatable;
-- preserve the raw source file and target provenance for every candidate;
-- distinguish extracted observations from identity or relationship inferences;
-- use deterministic, network-free normalizers;
-- reject unknown future schema versions; and
-- avoid silently treating arbitrary finding values as entities.
-
-Until that schema is implemented and released, plugin authors must use only
-the documented schema 1 fields below.
+Schema 1 remains readable during the v0.5 transition but cannot emit candidate
+entities. Unknown future schema versions fail validation.
 
 ## Adapter placeholders
 
@@ -116,7 +111,7 @@ emits one JSON object:
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "findings": [
     {
       "kind": "username_profile",
@@ -124,6 +119,13 @@ emits one JSON object:
       "title": "Possible username profile on Example",
       "value": "https://social.example/example_handle",
       "attributes": {"status": "Claimed"},
+      "source_file": "results.json"
+    }
+  ],
+  "candidates": [
+    {
+      "type": "domain",
+      "value": "profile.example",
       "source_file": "results.json"
     }
   ]
@@ -140,6 +142,13 @@ Normalizers must be deterministic, standard-library-only, network-free,
 read-only, and consistently sorted. They should fail nonzero when required
 structured output is missing or malformed. Changes require synthetic positive
 and negative fixtures.
+
+Candidate records are extracted observations, not relationships or identity
+claims. `type` must appear in the plugin's `entities.emitted`; `value` must be
+non-empty text; and `source_file` follows the same confinement rules as
+findings. Core assigns deterministic candidate IDs and adds plugin, target,
+run, raw-output, and source-file provenance. Candidate entities are never
+executed recursively in v0.5.
 
 ## Lifecycle environment
 

@@ -25,7 +25,7 @@ except ImportError:
     import entities
     import reporting
 
-__version__ = "0.4.0"
+__version__ = "0.5.0-dev"
 
 SYSTEM_ROOT = Path("/usr/local/share/osint-forge")
 STATE_ROOT = Path.home() / ".local/state/osint-forge"
@@ -404,7 +404,7 @@ def validate_plugin_directory(plugin_dir: Path) -> tuple[list[str], list[str]]:
         errors.append(
             f"{plugin_dir.name}: manifest id {plugin_id!r} must match directory name"
         )
-    if manifest.get("schema") != 1:
+    if manifest.get("schema") not in {1, 2}:
         errors.append(f"{plugin_dir.name}: unsupported schema {manifest.get('schema')!r}")
     if not isinstance(manifest.get("plugin_version"), str) or not manifest.get("plugin_version"):
         errors.append(f"{plugin_dir.name}: plugin_version must be a non-empty string")
@@ -437,6 +437,42 @@ def validate_plugin_directory(plugin_dir: Path) -> tuple[list[str], list[str]]:
         errors.append(
             f"{plugin_dir.name}: unsupported target types: {', '.join(unknown_targets)}"
         )
+
+    if manifest.get("schema") == 2:
+        entity_contract = manifest.get("entities")
+        if not isinstance(entity_contract, dict):
+            errors.append(f"{plugin_dir.name}: entities must be an object")
+            entity_contract = {}
+        accepted = entity_contract.get("accepted")
+        emitted = entity_contract.get("emitted")
+        valid_entity_fields = {}
+        for field, values in (("accepted", accepted), ("emitted", emitted)):
+            valid = (
+                isinstance(values, list)
+                and all(isinstance(item, str) for item in values)
+                and values == sorted(set(values))
+            )
+            valid_entity_fields[field] = valid
+            if not valid:
+                errors.append(
+                    f"{plugin_dir.name}: entities.{field} must be a sorted unique string array"
+                )
+        if valid_entity_fields["accepted"]:
+            unknown = sorted(set(accepted) - TARGET_TYPES)
+            if unknown:
+                errors.append(
+                    f"{plugin_dir.name}: unknown accepted entity types: {', '.join(unknown)}"
+                )
+            if accepted != sorted(set(supports)):
+                errors.append(
+                    f"{plugin_dir.name}: entities.accepted must match supports"
+                )
+        if valid_entity_fields["emitted"]:
+            unknown = sorted(set(emitted) - TARGET_TYPES)
+            if unknown:
+                errors.append(
+                    f"{plugin_dir.name}: unknown emitted entity types: {', '.join(unknown)}"
+                )
 
     if not isinstance(manifest.get("batch"), bool):
         errors.append(f"{plugin_dir.name}: batch must be true or false")
@@ -732,6 +768,9 @@ def cmd_info(args: argparse.Namespace) -> int:
     print(f"Homepage:    {m.get('homepage', '-')}")
     print(f"Commands:    {', '.join(m['commands']) or '-'}")
     print(f"Supports:    {', '.join(m['supports']) or '-'}")
+    entity_contract = m.get("entities", {})
+    print(f"Accepts:     {', '.join(entity_contract.get('accepted', [])) or '-'}")
+    print(f"Emits:       {', '.join(entity_contract.get('emitted', [])) or '-'}")
     print(f"Batch:       {'yes' if m.get('batch', False) else 'no'}")
     notes = m.get("notes")
     if notes:
@@ -1363,8 +1402,15 @@ def cmd_case_status(args: argparse.Namespace) -> int:
 
 
 def cmd_case_entities(args: argparse.Namespace) -> int:
-    _, metadata = load_case(args.case)
-    projection = entities.build_seed_entities(metadata, canonical_entity_value)
+    path, metadata = load_case(args.case)
+    report = build_case_report(path, metadata)
+    if report["normalization_errors"]:
+        raise SystemExit(
+            "Cannot project extracted entities: one or more jobs failed normalization."
+        )
+    projection = entities.build_case_entities(
+        metadata, report["candidates"], canonical_entity_value
+    )
     if args.json:
         print(json.dumps(projection, indent=2, sort_keys=True))
         return 0
@@ -1681,7 +1727,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = cs.add_parser(
         "entities",
-        help="list canonical seed entities and their provenance",
+        help="list canonical seed and extracted candidate entities",
     )
     p.add_argument("case")
     p.add_argument("--json", action="store_true")

@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "plugin_version": "2",
   "id": "nmap",
   "name": "Nmap",
@@ -20,6 +20,16 @@
     "domain",
     "ip"
   ],
+  "entities": {
+    "accepted": [
+      "domain",
+      "ip"
+    ],
+    "emitted": [
+      "domain",
+      "ip"
+    ]
+  },
   "batch": true,
   "normalizer": "normalize.py",
   "lifecycle": {

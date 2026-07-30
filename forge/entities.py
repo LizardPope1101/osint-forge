@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 LizardPope1101
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Versioned entity records derived from durable case data.
-
-This module deliberately starts with case targets only. Later releases can add
-entities extracted from normalized findings without changing the seed contract.
-"""
+"""Versioned entity records derived from durable case data and observations."""
 from __future__ import annotations
 
 import hashlib
@@ -62,3 +58,53 @@ def build_seed_entities(
         "entities": entities,
         "relationships": [],
     }
+
+
+def build_case_entities(
+    metadata: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    canonicalize,
+) -> dict[str, Any]:
+    """Merge seeds and extracted candidates without implying identity."""
+    projection = build_seed_entities(metadata, canonicalize)
+    by_id = {entity["id"]: entity for entity in projection["entities"]}
+    for candidate in candidates:
+        canonical_value = canonicalize(candidate["type"], candidate["value"])
+        identifier = entity_id(candidate["type"], canonical_value)
+        source = {
+            "kind": "extracted_observation",
+            "candidate_id": candidate["id"],
+            "target_id": candidate["target"]["id"],
+            "plugin": candidate["source"]["plugin"],
+            "source_file": candidate["source"]["source_file"],
+        }
+        if identifier in by_id:
+            if source not in by_id[identifier]["sources"]:
+                by_id[identifier]["sources"].append(source)
+            continue
+        by_id[identifier] = {
+            "id": identifier,
+            "type": candidate["type"],
+            "value": candidate["value"],
+            "canonical_value": canonical_value,
+            "origin": "extracted",
+            "confidence": {
+                "score": None,
+                "scope": "observation",
+                "method": "unverified_extraction",
+            },
+            "sources": [source],
+        }
+    result = list(by_id.values())
+    for entity in result:
+        entity["sources"].sort(
+            key=lambda source: (
+                source["kind"],
+                source.get("target_id", ""),
+                source.get("candidate_id", ""),
+            )
+        )
+    result.sort(key=lambda entity: (entity["type"], entity["canonical_value"]))
+    projection["entities"] = result
+    projection["entity_count"] = len(result)
+    return projection

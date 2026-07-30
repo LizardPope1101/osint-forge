@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "plugin_version": "2",
   "id": "ghunt",
   "name": "GHunt",
@@ -19,6 +19,12 @@
   "supports": [
     "email"
   ],
+  "entities": {
+    "accepted": [
+      "email"
+    ],
+    "emitted": []
+  },
   "batch": true,
   "normalizer": "normalize.py",
   "lifecycle": {

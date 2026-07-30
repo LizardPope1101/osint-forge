@@ -1,8 +1,9 @@
 # Entity Model
 
 OSINT Forge is evolving from tool orchestration toward evidence-preserving
-entity discovery and correlation. Version 0.4 establishes the first additive
-contract: deterministic entities projected from operator-supplied case targets.
+entity discovery and correlation. Version 0.4 established deterministic seed
+entities. Version 0.5 adds provenance-linked candidate observations extracted
+by explicitly authorized plugin normalizers.
 
 This foundation does not perform recursive discovery, automated identity
 attribution, or relationship inference.
@@ -20,7 +21,7 @@ The command returns an object with:
 - `schema`: entity-contract version;
 - `case_id`: owning case;
 - `entity_count`: number of projected entities;
-- `entities`: canonical seed entity records; and
+- `entities`: canonical seed and extracted-candidate entity records; and
 - `relationships`: currently empty, reserved for later evidence-backed links.
 
 Each seed entity contains:
@@ -35,6 +36,12 @@ Each seed entity contains:
 
 The projection is deterministic and derived from `case.json`. It is not a
 second writable source of truth.
+
+An extracted entity has `extracted` origin, an unscored
+`unverified_extraction` observation-confidence record, and one or more sources
+that identify the candidate record, originating target, plugin, and preserved
+source file. Canonically identical seed and extracted values become one entity
+with all sources retained. This is deduplication, not identity attribution.
 
 ## Seed types
 
@@ -88,7 +95,7 @@ The entity model is one layer of the committed
 [Roadmap to v1.0](ROADMAP.md). Planned releases extend it in controlled steps:
 
 1. v0.5 adds plugin declarations for accepted and emitted entity types plus
-   candidate-entity extraction from normalized findings.
+   candidate-entity extraction from preserved output.
 2. v0.6 adds entity-aware planning and explainable plugin selection.
 3. v0.7 binds entity and relationship provenance into integrity and export
    contracts.

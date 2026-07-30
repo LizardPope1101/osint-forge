@@ -16,6 +16,7 @@ def main() -> int:
         raise ValueError("Nmap XML exceeds the normalizer limit")
     root = ET.fromstring(source.read_bytes())
     findings = []
+    candidates = []
     for host in root.findall("host"):
         addresses = sorted(
             address.get("addr", "")
@@ -36,6 +37,18 @@ def main() -> int:
             "attributes": {"addresses": addresses, "hostnames": hostnames},
             "source_file": "results.xml",
         })
+        for address in addresses:
+            candidates.append({
+                "type": "ip",
+                "value": address,
+                "source_file": "results.xml",
+            })
+        for hostname in hostnames:
+            candidates.append({
+                "type": "domain",
+                "value": hostname.casefold().removesuffix("."),
+                "source_file": "results.xml",
+            })
         for port in host.findall("./ports/port"):
             state = port.find("state")
             if state is None or state.get("state") != "open":
@@ -57,7 +70,17 @@ def main() -> int:
                 },
                 "source_file": "results.xml",
             })
-    print(json.dumps({"schema": 1, "findings": findings}, sort_keys=True))
+    unique_candidates = {
+        (candidate["type"], candidate["value"], candidate["source_file"]): candidate
+        for candidate in candidates
+    }
+    print(json.dumps({
+        "schema": 2,
+        "findings": findings,
+        "candidates": [
+            unique_candidates[key] for key in sorted(unique_candidates)
+        ],
+    }, sort_keys=True))
     return 0
 
 

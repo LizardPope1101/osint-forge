@@ -16,7 +16,7 @@ license and current terms. The links below are the authoritative sources.
 | Recon-ng | https://github.com/lanmaster53/recon-ng | GPL-3.0 |
 | Sherlock | https://github.com/sherlock-project/sherlock | MIT |
 | SpiderFoot | https://github.com/smicallef/spiderfoot | MIT |
+| theHarvester | https://github.com/laramies/theHarvester | GPL-2.0-only |
 
 This list is informational and is not a substitute for the upstream license
 text. Upstream licensing may change after a plugin is released.
-

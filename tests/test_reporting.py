@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -145,9 +146,11 @@ class ReportingTests(unittest.TestCase):
             )
             self.assertEqual(reporting.render_json(first), reporting.render_json(second))
             self.assertEqual(first["summary"]["finding_count"], 6)
+            self.assertEqual(first["summary"]["candidate_count"], 2)
             self.assertEqual(first["summary"]["failed_jobs"], 1)
             self.assertEqual(first["normalization_errors"], [])
             self.assertTrue(first["integrity"]["all_findings_traceable"])
+            self.assertTrue(first["integrity"]["all_candidates_traceable"])
             for finding in first["findings"]:
                 self.assertTrue((case / finding["source"]["source_file"]).is_file())
             original_ids = {finding["id"] for finding in first["findings"]}
@@ -167,6 +170,108 @@ class ReportingTests(unittest.TestCase):
                 original_ids,
                 {finding["id"] for finding in rerun["findings"]},
             )
+            self.assertEqual(
+                {candidate["id"] for candidate in first["candidates"]},
+                {candidate["id"] for candidate in rerun["candidates"]},
+            )
+
+    def test_theharvester_extracts_deterministic_candidates(self):
+        plugin = osint_forge.plugin_root() / "theharvester"
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            shutil.copyfile(
+                FIXTURES / "theharvester.json", output / "results.json"
+            )
+            command = [
+                os.sys.executable,
+                str(plugin / "normalize.py"),
+                str(output),
+            ]
+            first = subprocess.run(
+                command, check=True, capture_output=True, text=True
+            ).stdout
+            second = subprocess.run(
+                command, check=True, capture_output=True, text=True
+            ).stdout
+            self.assertEqual(first, second)
+            payload = json.loads(first)
+            self.assertEqual(payload["schema"], 2)
+            self.assertEqual(
+                [(item["type"], item["value"]) for item in payload["candidates"]],
+                [
+                    ("domain", "api.example.com"),
+                    ("domain", "www.example.com"),
+                    ("email", "analyst@example.com"),
+                    ("email", "ops@example.com"),
+                    ("ip", "192.0.2.25"),
+                ],
+            )
+
+    def test_theharvester_rejects_malformed_collection_types(self):
+        plugin = osint_forge.plugin_root() / "theharvester"
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            (output / "results.json").write_text(
+                json.dumps({"emails": {"unexpected": "mapping"}}),
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [
+                    os.sys.executable,
+                    str(plugin / "normalize.py"),
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("emails must be a list of strings", completed.stderr)
+
+    def test_undeclared_candidate_type_fails_normalization(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            case = root / "case"
+            output = case / "raw"
+            plugin = root / "plugin"
+            output.mkdir(parents=True)
+            plugin.mkdir()
+            (output / "source.json").write_text("{}", encoding="utf-8")
+            normalizer = plugin / "normalize.py"
+            normalizer.write_text(
+                "import json\n"
+                "print(json.dumps({'schema': 2, 'findings': [], "
+                "'candidates': [{'type': 'email', 'value': "
+                "'lead@example.com', 'source_file': 'source.json'}]}))\n",
+                encoding="utf-8",
+            )
+            manifest = {
+                "id": "example",
+                "category": "testing",
+                "normalizer": "normalize.py",
+                "entities": {"accepted": ["domain"], "emitted": []},
+            }
+            state = {
+                "output": "raw",
+                "target_id": "target-1",
+                "plugin_version": "1",
+                "last_run": "run-1",
+                "status": "completed",
+                "exit_code": 0,
+                "completed_at": "2026-07-30T00:00:01+00:00",
+            }
+            status = {
+                "target_type": "domain",
+                "target": "example.com",
+                "framework_version": "0.5.0-dev",
+                "command": ["example", "example.com"],
+                "started_at": "2026-07-30T00:00:00+00:00",
+            }
+            with self.assertRaisesRegex(
+                reporting.NormalizationError, "emitted entity contract"
+            ):
+                reporting.normalize_job(
+                    case, plugin, manifest, state, status, {}
+                )
 
     def test_all_formats_and_shareable_redaction(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -207,6 +312,7 @@ class ReportingTests(unittest.TestCase):
                 "example_handle",
                 "analyst@example.com",
                 "192.0.2.10",
+                "host.example.com",
                 "/evidence/sample.txt",
                 "synthetic adapter failure",
             ):

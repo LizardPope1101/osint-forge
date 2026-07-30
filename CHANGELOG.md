@@ -9,10 +9,26 @@ stable release, minor versions may include breaking changes.
 
 ### Added
 
+- Versioned schema-2 plugin contracts declaring accepted and emitted entity
+  types.
+- Deterministic, provenance-linked candidate entity extraction that remains
+  distinct from relationships and identity conclusions.
+- Candidate entities in `osint case entities`, with seed deduplication and no
+  recursive execution.
+- A governed theHarvester integration using restrained passive defaults and
+  deterministic domain, email, and IP extraction.
+- Recorded accept, defer, and reject decisions for every v0.5 catalog
+  candidate.
 - A resumable, exact-commit QA harness with atomic machine-readable state,
   per-step logs and exit codes, private evidence permissions, concurrent-run
   locking, verified checkpoints, exact hosted-check enforcement, archive
   validation, and a tamper-evident SHA-256 evidence manifest.
+
+### Changed
+
+- Development version is now `0.5.0-dev`.
+- Normalized report schema 2 includes candidate observations and traceability
+  integrity status while retaining schema-1 normalizer compatibility.
 
 ## 0.4.0 - 2026-07-29
 
