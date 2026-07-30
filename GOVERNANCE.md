@@ -22,6 +22,12 @@ He alone may:
 Delegation is explicit, limited, and revocable. Repository permissions do not
 grant authority beyond the scope LizardPope1101 has stated.
 
+LizardPope1101 may delegate defined development, testing, review, merge,
+release, and administrative-closeout actions to an AI he has connected and
+authorized. Such delegation must identify its repository and environment
+scope, remains subject to `AI_POLICY.md` and every release gate, and does not
+allow the AI to modify or expand the policies governing its own authority.
+
 ## Contributors and reviewers
 
 Contributors may propose code, tests, documentation, issues, and reviews.

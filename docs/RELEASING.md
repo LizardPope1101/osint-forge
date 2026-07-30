@@ -12,9 +12,11 @@ prevents two release procedures from drifting apart.
 
 Release-related AI activity is governed by [`AI_POLICY.md`](../AI_POLICY.md).
 Only LizardPope1101 may connect or authorize an AI system to access the
-repository. The authoritative process requires AI-assisted, human-operated
-testing on a current Debian stable VM after merge and before tagging, including
-a patch-and-retest loop when defects are found.
+repository. The authoritative process requires live testing on a current
+Debian stable VM after merge and before tagging. That gate may be
+human-operated with AI assistance or autonomously executed by an AI under
+explicit owner authorization. Both modes require complete retained evidence,
+fail-closed handling, and a patch-and-retest loop when defects are found.
 
 Publishing the GitHub release does not complete the process. The authoritative
 procedure includes a mandatory administrative closeout after publication:
