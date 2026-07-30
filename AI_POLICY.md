@@ -107,6 +107,10 @@ authority.
 
 AI assistance does not reduce the testing burden. Release candidates must
 complete every numbered gate in the authoritative wiki Release Process.
+Automated candidate validation must use the repository QA harness in its
+fail-closed release profile. Its exact-commit state, step logs, exit codes, and
+evidence manifest must be retained and verified. The harness supplements rather
+than replaces live Debian validation.
 
 Live release testing may use either of two modes selected and authorized by
 LizardPope1101:

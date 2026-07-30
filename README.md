@@ -20,6 +20,11 @@ OSINT Forge supports Debian stable and Ubuntu 24.04 with Python 3.10 through
 the active development branch and may contain changes intended for the next
 release.
 
+Development uses the fast `./scripts/dev-check.sh` check. Resumable,
+exact-commit, tamper-evident validation is provided by the
+[QA harness](docs/QA-HARNESS.md). Release candidates use its fail-closed
+`release` profile and retain owner-only evidence outside the source tree.
+
 ## Fresh Debian/Ubuntu installation
 
 Clone the latest stable tag:

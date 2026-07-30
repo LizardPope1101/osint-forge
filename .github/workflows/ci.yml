@@ -52,6 +52,7 @@ jobs:
           test -x bootstrap.sh
           test -x bin/osint
           test -x forge/osint_forge.py
+          test -x scripts/qa-harness.py
           test -z "$(find scripts plugins docs/plugin-template -type f \
             -name '*.sh' ! -perm -u+x -print -quit)"
 

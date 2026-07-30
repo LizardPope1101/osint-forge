@@ -1,0 +1,167 @@
+# SPDX-FileCopyrightText: 2026 LizardPope1101
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import io
+from pathlib import Path
+import tempfile
+import unittest
+from unittest import mock
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location(
+    "qa_harness", ROOT / "scripts/qa-harness.py"
+)
+assert SPEC and SPEC.loader
+qa_harness = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(qa_harness)
+
+
+def arguments(root: Path, **overrides):
+    values = {
+        "profile": "development",
+        "evidence_root": root,
+        "resume": None,
+        "candidate_ref": None,
+        "authorization": "synthetic harness regression",
+        "allow_dirty": True,
+        "verify": None,
+    }
+    values.update(overrides)
+    return argparse.Namespace(**values)
+
+
+class QaHarnessTests(unittest.TestCase):
+    def test_passed_run_can_resume_only_with_untampered_evidence(self):
+        plan = [
+            qa_harness.command_step(
+                "synthetic-pass",
+                ["python3", "-c", "print('synthetic pass')"],
+                required="python3",
+            )
+        ]
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(
+            qa_harness, "build_plan", return_value=plan
+        ):
+            evidence = Path(temporary)
+            first = qa_harness.Harness(arguments(evidence))
+            first.initialize()
+            try:
+                self.assertEqual(first.run(), 0)
+                run_dir = first.run_dir
+            finally:
+                first.release_lock()
+
+            resumed = qa_harness.Harness(
+                arguments(evidence, resume=run_dir)
+            )
+            resumed.initialize()
+            try:
+                self.assertEqual(resumed.run(), 0)
+            finally:
+                resumed.release_lock()
+
+            log = next((run_dir / "logs").glob("*.log"))
+            log.write_text("tampered\n", encoding="utf-8")
+            rejected = qa_harness.Harness(
+                arguments(evidence, resume=run_dir)
+            )
+            with self.assertRaisesRegex(
+                qa_harness.HarnessError, "evidence changed"
+            ):
+                rejected.initialize()
+
+    def test_failed_step_records_exit_code_and_is_resumable(self):
+        failing = [
+            qa_harness.command_step(
+                "synthetic-failure",
+                ["python3", "-c", "raise SystemExit(7)"],
+                required="python3",
+            )
+        ]
+        passing = [
+            qa_harness.command_step(
+                "synthetic-failure",
+                ["python3", "-c", "print('recovered')"],
+                required="python3",
+            )
+        ]
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(
+            qa_harness, "build_plan", return_value=failing
+        ):
+            evidence = Path(temporary)
+            first = qa_harness.Harness(arguments(evidence))
+            first.initialize()
+            try:
+                self.assertEqual(first.run(), 1)
+                run_dir = first.run_dir
+                self.assertEqual(first.state["status"], "failed")
+                self.assertEqual(
+                    first.state["steps"]["synthetic-failure"]["exit_code"], 7
+                )
+            finally:
+                first.release_lock()
+
+            # A changed plan is deliberately not resumable, even if it would pass.
+            with mock.patch.object(qa_harness, "build_plan", return_value=passing):
+                rejected = qa_harness.Harness(
+                    arguments(evidence, resume=run_dir)
+                )
+                with self.assertRaisesRegex(qa_harness.HarnessError, "plan_hash"):
+                    rejected.initialize()
+
+    def test_manifest_verifier_detects_changed_and_unmanifested_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary)
+            evidence = run_dir / "state.json"
+            evidence.write_text("{}\n", encoding="utf-8")
+            digest = hashlib.sha256(evidence.read_bytes()).hexdigest()
+            (run_dir / "MANIFEST.sha256").write_text(
+                f"{digest}  state.json\n", encoding="utf-8"
+            )
+            self.assertEqual(qa_harness.verify_evidence(run_dir), 0)
+
+            evidence.write_text('{"changed": true}\n', encoding="utf-8")
+            with mock.patch("sys.stderr", new=io.StringIO()):
+                self.assertEqual(qa_harness.verify_evidence(run_dir), 1)
+
+            evidence.write_text("{}\n", encoding="utf-8")
+            (run_dir / "extra.log").write_text("untracked evidence\n", encoding="utf-8")
+            with mock.patch("sys.stderr", new=io.StringIO()):
+                self.assertEqual(qa_harness.verify_evidence(run_dir), 1)
+
+    def test_release_profile_never_allows_dirty_override(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            harness = qa_harness.Harness(
+                arguments(
+                    Path(temporary),
+                    profile="release",
+                    allow_dirty=True,
+                    candidate_ref="HEAD",
+                )
+            )
+            with self.assertRaisesRegex(
+                qa_harness.HarnessError, "forbidden for the release profile"
+            ):
+                harness.validate_candidate()
+
+    def test_evidence_path_rejects_symbolic_link_component(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            actual = root / "actual"
+            actual.mkdir()
+            linked = root / "linked"
+            linked.symlink_to(actual, target_is_directory=True)
+            harness = qa_harness.Harness(arguments(linked))
+            with self.assertRaisesRegex(
+                qa_harness.HarnessError, "symbolic-link QA evidence path"
+            ):
+                harness.initialize()
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -5,6 +5,15 @@ All notable changes to OSINT Forge will be documented here.
 The project follows [Semantic Versioning](https://semver.org/). Until the first
 stable release, minor versions may include breaking changes.
 
+## Unreleased
+
+### Added
+
+- A resumable, exact-commit QA harness with atomic machine-readable state,
+  per-step logs and exit codes, private evidence permissions, concurrent-run
+  locking, verified checkpoints, exact hosted-check enforcement, archive
+  validation, and a tamper-evident SHA-256 evidence manifest.
+
 ## 0.4.0 - 2026-07-29
 
 ### Added
