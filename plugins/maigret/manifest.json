@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "plugin_version": "2",
   "id": "maigret",
   "name": "Maigret",
@@ -19,6 +19,12 @@
   "supports": [
     "username"
   ],
+  "entities": {
+    "accepted": [
+      "username"
+    ],
+    "emitted": []
+  },
   "batch": true,
   "normalizer": "normalize.py",
   "lifecycle": {

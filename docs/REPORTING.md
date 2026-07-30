@@ -12,8 +12,10 @@ to apply an explicit confidence threshold. No automated score will replace raw
 evidence, source independence analysis, correlation rationale, or analyst
 judgment.
 
-OSINT Forge v0.4 converts heterogeneous tool output into a common finding
-contract without replacing raw evidence. JSON is the machine-readable master;
+OSINT Forge converts heterogeneous tool output into a common finding contract
+without replacing raw evidence. Report schema 2 also carries deterministic
+candidate observations emitted under plugin schema 2. JSON is the
+machine-readable master;
 Markdown, HTML, and CSV are deterministic views of the same report.
 
 ## Generate reports
@@ -33,7 +35,7 @@ osint case report example-case --format all
 
 All artifacts use mode `0600`. Markdown and HTML link to preserved evidence.
 CSV contains one row per finding; JSON also contains outcomes, errors,
-attributes, orphaned reviews, and integrity metadata.
+attributes, candidate observations, orphaned reviews, and integrity metadata.
 
 ## Contract and provenance
 
@@ -50,6 +52,12 @@ IDs remain stable across reruns while the plugin, target, source filename, and
 normalized content are unchanged. The latest run remains recorded separately
 in provenance. New findings start at `unverified`; tool output is never
 accepted as fact automatically.
+
+Every candidate includes a stable content-derived ID, entity type, value,
+`extracted_observation` classification, originating target, plugin and plugin
+version, run ID, exact source file, and raw-output directory. Its type must be
+declared in the plugin's `entities.emitted` contract. Candidate values are not
+relationships, identity conclusions, or automatically queued work.
 
 ## Analyst review
 
@@ -75,6 +83,8 @@ This writes `shareable-report.md`, `shareable-report.json`,
 `structure-only-v1` policy removes case purpose, authorization scope, original
 case ID, target values and IDs, original job/run IDs, commands, raw/source
 paths, finding values and attributes, analyst notes, and error detail.
+Candidate values, target identifiers, run identifiers, and source paths are
+also removed.
 
 Plugin names, categories, finding kinds/titles, outcome states, exit codes,
 timestamps, and confidence remain. Redaction cannot understand every

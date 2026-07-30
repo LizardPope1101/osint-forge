@@ -82,6 +82,11 @@ Tracking: [issue #13](https://github.com/LizardPope1101/osint-forge/issues/13)
 - Preserve lifecycle, clean-install, normalizer, provenance, and regression
   coverage for the original and expanded catalog.
 
+Implementation status: schema-2 entity contracts, candidate extraction, the
+governed theHarvester integration, and all seven candidate decisions are
+implemented for the v0.5 release candidate. Tagging remains blocked on the
+mandatory live Debian release-candidate test.
+
 ### v0.6 — Planning and orchestration
 
 Tracking: [issue #18](https://github.com/LizardPope1101/osint-forge/issues/18)

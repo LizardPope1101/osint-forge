@@ -1,0 +1,14 @@
+{
+  "cmd": "--domain example.com --source crtsh,rapiddns",
+  "emails": [
+    "Analyst@Example.com",
+    "ops@example.com"
+  ],
+  "hosts": [
+    "api.example.com:192.0.2.25",
+    "www.example.com"
+  ],
+  "ips": [
+    "192.0.2.25"
+  ]
+}

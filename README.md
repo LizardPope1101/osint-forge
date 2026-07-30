@@ -55,6 +55,7 @@ osint forge version
 ```bash
 osint forge install maigret
 osint forge install maigret sherlock ghunt
+osint forge install theharvester
 osint forge install usernames
 osint forge install infrastructure --dry-run
 
@@ -120,7 +121,8 @@ osint case add example-case email analyst@example.com
 osint case add example-case name "Example Person"
 osint case add example-case phone "+1 (555) 555-0100"
 osint case add example-case address "1 Example Way, Example City, NY"
-osint case run example-case --plugins maigret sherlock
+osint case add example-case domain example.com
+osint case run example-case --plugins maigret sherlock theharvester
 osint case status example-case
 osint case entities example-case
 osint case report example-case
@@ -153,6 +155,13 @@ correlation and controlled recursive discovery; it does not infer identity or
 automatically pursue new targets.
 See [`docs/ENTITY-MODEL.md`](docs/ENTITY-MODEL.md) for the versioned contract
 and forward-compatibility rules.
+
+Plugin schema 2 declares both accepted seed types and candidate entity types a
+normalizer may emit. Extracted candidates remain unverified observations:
+Forge deduplicates them against seeds and preserves evidence provenance, but
+v0.5 never follows them automatically or treats them as identity conclusions.
+See the [Plugin API](docs/PLUGIN-API.md) and
+[v0.5 candidate decisions](docs/PLUGIN-EVALUATION.md).
 
 ## Modular plugin system
 

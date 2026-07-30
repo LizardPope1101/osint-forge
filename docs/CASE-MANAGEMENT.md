@@ -119,9 +119,11 @@ than reconstructed shell commands.
 `notes/` is reserved for analyst-authored material. `findings/` is reserved for
 derived and reviewed findings. Neither is mixed with raw tool output.
 
-## Entity foundation
+## Entity projection
 
-Version 0.4 introduces a versioned, read-only entity projection:
+The versioned, read-only entity projection combines operator-supplied seeds
+with deterministic candidate observations from successful schema-2
+normalizers:
 
 ```bash
 osint case entities example-case --json
@@ -136,13 +138,16 @@ normalized for names and addresses.
 Seed confidence describes input fidelity only: the operator deliberately
 supplied the value. It does not assert that the seed belongs to a particular
 person, that an address is current, or that any relationship has been proven.
-The initial relationship collection is empty.
+Extracted candidates remain unverified observations with source target,
+plugin, run, and raw-file provenance. Canonically equivalent candidates and
+seeds merge without dropping any source. The relationship collection remains
+empty.
 
-This projection is derived rather than independently persisted, so it cannot
-drift from `case.json`. It establishes the contract that later versions can
-extend with entities and relationships extracted from normalized findings,
-correlation evidence, confidence assessments, and controlled discovery queues.
-It does not perform recursive discovery or automated identity attribution.
+This projection is derived rather than independently persisted. Seed state
+comes from `case.json`; candidates are rebuilt from preserved output through
+the same deterministic normalizers used for reports. It does not perform
+recursive discovery, relationship inference, or automated identity
+attribution.
 See [Entity Model](ENTITY-MODEL.md) for the complete contract and its
 confidence boundary.
 
@@ -150,8 +155,8 @@ By v1.0, a case is intended to carry the complete evidence graph for a bounded
 investigation: supplied seeds, extracted candidates, relationships,
 contradictions, confidence assessments, queue decisions, analyst actions, and
 the rationale for each pursued lead. These capabilities will arrive through
-the versioned stages in the [Roadmap to v1.0](ROADMAP.md); the current v0.4
-projection remains read-only and seed-only.
+the versioned stages in the [Roadmap to v1.0](ROADMAP.md); the projection
+remains read-only in v0.5.
 
 ## Privacy and integrity
 

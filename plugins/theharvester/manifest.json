@@ -1,0 +1,63 @@
+{
+  "schema": 2,
+  "plugin_version": "1",
+  "id": "theharvester",
+  "name": "theHarvester",
+  "description": "Passive domain reconnaissance with structured email, host, and IP output.",
+  "category": "infrastructure",
+  "homepage": "https://github.com/laramies/theHarvester",
+  "upstream_license": "GPL-2.0-only",
+  "upstream_license_url": "https://github.com/laramies/theHarvester/blob/master/README/LICENSES",
+  "tags": [
+    "batch",
+    "domains",
+    "email",
+    "passive"
+  ],
+  "commands": [
+    "theHarvester"
+  ],
+  "supports": [
+    "domain"
+  ],
+  "entities": {
+    "accepted": [
+      "domain"
+    ],
+    "emitted": [
+      "domain",
+      "email",
+      "ip"
+    ]
+  },
+  "batch": true,
+  "normalizer": "normalize.py",
+  "lifecycle": {
+    "install": "install.sh",
+    "update": "update.sh",
+    "remove": "remove.sh",
+    "doctor": "doctor.sh"
+  },
+  "requires_root": {
+    "install": false,
+    "update": false,
+    "remove": false,
+    "doctor": false
+  },
+  "adapters": {
+    "domain": {
+      "command": [
+        "theHarvester",
+        "--domain",
+        "{target}",
+        "--source",
+        "crtsh,rapiddns",
+        "--limit",
+        "100",
+        "--filename",
+        "results",
+        "--quiet"
+      ]
+    }
+  }
+}

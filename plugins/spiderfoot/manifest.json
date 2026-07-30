@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "plugin_version": "1",
   "id": "spiderfoot",
   "name": "SpiderFoot",
@@ -22,6 +22,15 @@
     "email",
     "username"
   ],
+  "entities": {
+    "accepted": [
+      "domain",
+      "email",
+      "ip",
+      "username"
+    ],
+    "emitted": []
+  },
   "batch": false,
   "lifecycle": {
     "install": "install.sh",

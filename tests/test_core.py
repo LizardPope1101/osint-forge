@@ -23,7 +23,7 @@ class CatalogTests(unittest.TestCase):
             set(osint_forge.catalog()),
             {
                 "exiftool", "ghunt", "maigret", "nmap",
-                "recon-ng", "sherlock", "spiderfoot",
+                "recon-ng", "sherlock", "spiderfoot", "theharvester",
             },
         )
 
@@ -34,6 +34,39 @@ class CatalogTests(unittest.TestCase):
                 plugin_errors, _ = osint_forge.validate_plugin_directory(directory)
                 errors.extend(plugin_errors)
         self.assertEqual(errors, [])
+
+    def test_schema_two_entity_contracts_are_explicit(self):
+        for plugin_id, (_, manifest) in osint_forge.catalog().items():
+            with self.subTest(plugin=plugin_id):
+                self.assertEqual(manifest["schema"], 2)
+                self.assertEqual(
+                    manifest["entities"]["accepted"],
+                    sorted(set(manifest["supports"])),
+                )
+                self.assertEqual(
+                    manifest["entities"]["emitted"],
+                    sorted(set(manifest["entities"]["emitted"])),
+                )
+
+    def test_schema_two_malformed_entity_values_fail_without_crashing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            plugin = Path(temp) / "example"
+            shutil.copytree(
+                Path(__file__).resolve().parents[1] / "docs/plugin-template",
+                plugin,
+            )
+            manifest_path = plugin / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["id"] = "example"
+            manifest["entities"]["accepted"] = [{"not": "text"}]
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            errors, _ = osint_forge.validate_plugin_directory(plugin)
+
+            self.assertTrue(
+                any("entities.accepted" in error for error in errors),
+                errors,
+            )
 
     def test_manifest_id_must_match_directory(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -183,6 +216,38 @@ class TargetTests(unittest.TestCase):
             osint_forge.canonical_entity_value("phone", "+1 (555) 555-0100"),
             "+15555550100",
         )
+
+    def test_extracted_entities_merge_with_seeds_without_implying_identity(self):
+        metadata = {
+            "id": "case-001",
+            "targets": [{
+                "id": "domain-seed",
+                "type": "domain",
+                "value": "Example.COM",
+                "added_at": "2026-07-30T00:00:00+00:00",
+            }],
+        }
+        candidate = {
+            "id": "candidate-001",
+            "type": "domain",
+            "value": "example.com",
+            "target": {"id": "domain-seed"},
+            "source": {
+                "plugin": "theharvester",
+                "source_file": "runs/run-1/results.json",
+            },
+        }
+        projection = osint_forge.entities.build_case_entities(
+            metadata, [candidate], osint_forge.canonical_entity_value
+        )
+        self.assertEqual(projection["entity_count"], 1)
+        entity = projection["entities"][0]
+        self.assertEqual(entity["origin"], "seed")
+        self.assertEqual(
+            {source["kind"] for source in entity["sources"]},
+            {"case_target", "extracted_observation"},
+        )
+        self.assertEqual(projection["relationships"], [])
         self.assertEqual(
             osint_forge.canonical_entity_value("name", "  Example   Person "),
             "example person",
@@ -622,7 +687,7 @@ class ExecutionTests(unittest.TestCase):
 
 class CliTests(unittest.TestCase):
     def test_version_command(self):
-        self.assertEqual(osint_forge.__version__, "0.4.0")
+        self.assertEqual(osint_forge.__version__, "0.5.0-dev")
 
     def test_validate_command_succeeds(self):
         rc = osint_forge.cmd_validate(argparse.Namespace(json=False))
@@ -1307,6 +1372,28 @@ class ShellScriptTests(unittest.TestCase):
                 content,
             )
             self.assertIn("install_spiderfoot_build_dependencies", content)
+
+    def test_theharvester_is_version_pinned_and_passive(self):
+        plugin = osint_forge.SOURCE_ROOT / "plugins" / "theharvester"
+        manifest = json.loads(
+            (plugin / "manifest.json").read_text(encoding="utf-8")
+        )
+        command = manifest["adapters"]["domain"]["command"]
+        self.assertIn("crtsh,rapiddns", command)
+        for active_option in (
+            "--dns-resolve",
+            "--dns-brute",
+            "--take-over",
+            "--screenshot",
+            "--shodan",
+            "--api-scan",
+        ):
+            self.assertNotIn(active_option, command)
+        for lifecycle in ("install.sh", "update.sh"):
+            content = (plugin / lifecycle).read_text(encoding="utf-8")
+            self.assertIn(
+                "github.com/laramies/theHarvester.git@4.11.1", content
+            )
 
     def test_spiderfoot_python_313_requirements_overlay(self):
         plugin = osint_forge.SOURCE_ROOT / "plugins" / "spiderfoot"
