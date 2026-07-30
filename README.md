@@ -127,10 +127,10 @@ append-only activity log are stored with owner-only permissions. Re-running
 `osint case run` skips successful jobs and retries failed or missing jobs.
 Use `--rerun` to execute successful jobs again.
 
-The default Markdown report remains available at `report.md`. On the v0.4
-development line, `--format all` also produces a versioned JSON master report,
-HTML report, and CSV findings summary. Findings retain target, plugin, command,
-run, timestamp, exit-status, source-file, and raw-output provenance. Use
+The default Markdown report remains available at `report.md`. In v0.4,
+`--format all` also produces a versioned JSON master report, HTML report, and
+CSV findings summary. Findings retain target, plugin, command, run, timestamp,
+exit-status, source-file, and raw-output provenance. Use
 `osint case findings` for stable finding IDs and `osint case annotate` for
 confidence or analyst notes. `--shareable` creates conservatively redacted
 copies that still require review before distribution.
@@ -139,9 +139,9 @@ Normalized findings remain unverified leads. See
 [`docs/CASE-MANAGEMENT.md`](docs/CASE-MANAGEMENT.md) and
 [`docs/REPORTING.md`](docs/REPORTING.md).
 
-The v0.4 development line also exposes a versioned entity foundation. Name,
-phone, and address seeds can be added even when no current plugin consumes
-them, and `osint case entities` projects every case target into a canonical,
+Version 0.4 also exposes a versioned entity foundation. Name, phone, and
+address seeds can be added even when no current plugin consumes them, and
+`osint case entities` projects every case target into a canonical,
 provenance-linked seed entity. This is additive groundwork for later
 correlation and controlled recursive discovery; it does not infer identity or
 automatically pursue new targets.
