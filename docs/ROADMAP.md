@@ -41,7 +41,8 @@ capabilities below are the intended stable destination.
 - Existing interfaces evolve through versioned contracts, migrations, and
   compatibility tests.
 - Every release receives comprehensive automated testing and the mandatory
-  AI-assisted, human-operated Debian VM test before tagging.
+  Debian VM test before tagging, performed either by a human with AI assistance
+  or by an AI under explicit owner authorization.
 
 ## Release plan
 
