@@ -62,6 +62,10 @@ Before opening a pull request, run:
 ./scripts/dev-check.sh
 ```
 
+The development check binds validation to the current source checkout, so an
+older system installation or separately installed plugin cannot substitute its
+framework files for the candidate under test.
+
 GitHub Actions repeats these checks and also runs ShellCheck and a Debian
 stable and Ubuntu 24.04 clean-install test. Python checks run across versions
 3.10 through 3.13.
