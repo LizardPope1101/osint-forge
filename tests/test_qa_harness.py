@@ -36,6 +36,28 @@ def arguments(root: Path, **overrides):
 
 
 class QaHarnessTests(unittest.TestCase):
+    def setUp(self):
+        def isolated_git(_root, *arguments):
+            if arguments == ("rev-parse", "HEAD"):
+                return "a" * 40
+            if arguments == ("rev-parse", "HEAD^{tree}"):
+                return "b" * 40
+            if arguments == ("remote", "get-url", "origin"):
+                return "https://github.com/LizardPope1101/osint-forge.git"
+            if arguments == ("branch", "--show-current"):
+                return "synthetic-test"
+            if arguments == ("rev-parse", "--show-toplevel"):
+                return str(ROOT)
+            if arguments == ("rev-parse", "HEAD^{commit}"):
+                return "a" * 40
+            if arguments == ("status", "--porcelain=v1", "--untracked-files=all"):
+                return ""
+            raise AssertionError(f"Unexpected Git call: {arguments!r}")
+
+        patcher = mock.patch.object(qa_harness, "git", side_effect=isolated_git)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_passed_run_can_resume_only_with_untampered_evidence(self):
         plan = [
             qa_harness.command_step(
