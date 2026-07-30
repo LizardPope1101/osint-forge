@@ -570,7 +570,7 @@ class ExecutionTests(unittest.TestCase):
 
 class CliTests(unittest.TestCase):
     def test_version_command(self):
-        self.assertEqual(osint_forge.__version__, "0.4.0-dev")
+        self.assertEqual(osint_forge.__version__, "0.4.0")
 
     def test_validate_command_succeeds(self):
         rc = osint_forge.cmd_validate(argparse.Namespace(json=False))

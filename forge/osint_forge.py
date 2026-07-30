@@ -25,7 +25,7 @@ except ImportError:
     import entities
     import reporting
 
-__version__ = "0.4.0-dev"
+__version__ = "0.4.0"
 
 SYSTEM_ROOT = Path("/usr/local/share/osint-forge")
 STATE_ROOT = Path.home() / ".local/state/osint-forge"

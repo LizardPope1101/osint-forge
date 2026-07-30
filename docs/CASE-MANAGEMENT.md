@@ -121,7 +121,7 @@ derived and reviewed findings. Neither is mixed with raw tool output.
 
 ## Entity foundation
 
-The v0.4 development line introduces a versioned, read-only entity projection:
+Version 0.4 introduces a versioned, read-only entity projection:
 
 ```bash
 osint case entities example-case --json

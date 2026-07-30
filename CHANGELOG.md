@@ -5,7 +5,7 @@ All notable changes to OSINT Forge will be documented here.
 The project follows [Semantic Versioning](https://semver.org/). Until the first
 stable release, minor versions may include breaking changes.
 
-## Unreleased
+## 0.4.0 - 2026-07-29
 
 ### Added
 
@@ -27,6 +27,13 @@ stable release, minor versions may include breaking changes.
   normalization errors instead of silently dropping them.
 - Project documentation now defines the committed path from v0.4 seed entities
   through a stable, bounded recursive intelligence workflow in v1.0.
+- Release validation may run in owner-authorized autonomous mode on a dedicated
+  Debian VM while retaining every existing evidence and fail-closed gate.
+
+### Fixed
+
+- Isolate source development checks from older installed framework files and
+  separately installed pipx commands.
 
 ### Security
 

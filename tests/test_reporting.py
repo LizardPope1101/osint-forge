@@ -69,7 +69,7 @@ class ReportingTests(unittest.TestCase):
                 {
                     "plugin": plugin,
                     "plugin_version": "2",
-                    "framework_version": "0.4.0-dev",
+                    "framework_version": "0.4.0",
                     "target_id": target_id,
                     "target_type": target_type,
                     "target": target,
@@ -96,7 +96,7 @@ class ReportingTests(unittest.TestCase):
             {
                 "plugin": "sherlock",
                 "plugin_version": "2",
-                "framework_version": "0.4.0-dev",
+                "framework_version": "0.4.0",
                 "target_id": target_ids["username"],
                 "target_type": "username",
                 "target": "example_handle",
