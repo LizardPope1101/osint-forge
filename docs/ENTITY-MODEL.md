@@ -89,6 +89,12 @@ Later confidence models must state their scope, method, evidence, and
 independence assumptions instead of collapsing every judgment into one opaque
 number.
 
+Currentness is an independent assessment. Strong evidence that a phone number,
+email address, location, or account belonged to a subject does not establish
+that it remains current. The stable workflow must preserve observation time,
+source time when available, newer contradictions, and possible identifier
+reassignment before assigning a temporal status.
+
 ## Forward compatibility
 
 The entity model is one layer of the committed
@@ -99,12 +105,16 @@ The entity model is one layer of the committed
 2. v0.6 adds entity-aware planning and explainable plugin selection.
 3. v0.7 binds entity and relationship provenance into integrity and export
    contracts.
-4. v0.8 adds evidence-backed relationships, source-aware correlation, and
-   separate observation, relationship, and identity confidence.
+4. v0.8 adds evidence-backed relationships, source-aware correlation, temporal
+   status, and separate observation, relationship, identity, and currentness
+   confidence.
 5. v0.9 adds bounded discovery queues with cycle, resource, approval, and
    authorization-scope controls.
-6. v1.0 stabilizes the end-to-end workflow and confidence-filtered intelligence
-   report.
+6. v1.0 stabilizes the three-seed-to-profile workflow and confidence- and
+   currentness-filtered intelligence report.
 
 Schema changes must remain versioned, tested, provenance-preserving, and
 readable by explicit migrations or compatibility layers.
+
+See the [v1.0 Product Contract](V1-PRODUCT-CONTRACT.md) for the canonical
+profile, recursion, temporal-status, and accuracy requirements.

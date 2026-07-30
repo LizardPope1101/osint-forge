@@ -200,7 +200,11 @@ plugin, evidence, and CLI behavior remains testable while the new entity,
 correlation, and discovery layers mature.
 
 See the canonical repository [Roadmap to v1.0](docs/ROADMAP.md) and the
-[architecture tracking issue](https://github.com/LizardPope1101/osint-forge/issues/44).
+[v1.0 Product Contract](docs/V1-PRODUCT-CONTRACT.md), which defines the
+three-seed-to-profile workflow, temporal status, confidence boundaries,
+recursive stopping conditions, and measurable accuracy requirements. The
+[architecture tracking issue](https://github.com/LizardPope1101/osint-forge/issues/44)
+coordinates implementation.
 Release work is tracked in:
 
 - [v0.4: normalized reporting and seed entities](https://github.com/LizardPope1101/osint-forge/issues/6)
