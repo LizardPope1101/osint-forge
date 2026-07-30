@@ -85,6 +85,20 @@ On resume, every passed step is skipped only after its evidence hash is
 verified. Failed, interrupted, or incomplete steps run again. If the repository
 or plan changed, start a new run instead.
 
+## Check live progress
+
+The harness prints and flushes the run directory, profile, commit, and each
+current step. From another terminal, request a concise status without modifying
+the run:
+
+```bash
+./scripts/qa-harness.py \
+  --status ~/OSINT-Forge-QA/runs/RUN-ID
+```
+
+This reports the run state, current step, step counts, commit, timestamps, and
+failure message when applicable.
+
 ## Verify retained evidence
 
 Verify a completed or failed run at any later time:

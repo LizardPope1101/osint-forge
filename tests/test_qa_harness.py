@@ -134,6 +134,35 @@ class QaHarnessTests(unittest.TestCase):
             with mock.patch("sys.stderr", new=io.StringIO()):
                 self.assertEqual(qa_harness.verify_evidence(run_dir), 1)
 
+    def test_status_reports_current_step(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary)
+            qa_harness.atomic_json(
+                run_dir / "state.json",
+                {
+                    "run_id": "synthetic-run",
+                    "status": "running",
+                    "profile": "release",
+                    "commit": "a" * 40,
+                    "current_step": "unit-integration-tests",
+                    "steps": {
+                        "python-compile": {"status": "passed"},
+                        "unit-integration-tests": {"status": "running"},
+                    },
+                    "started_at": "2026-07-30T00:00:00+00:00",
+                    "completed_at": None,
+                    "failure": None,
+                },
+            )
+            output = io.StringIO()
+            with mock.patch("sys.stdout", new=output):
+                self.assertEqual(qa_harness.show_status(run_dir), 0)
+            rendered = output.getvalue()
+            self.assertIn("Status:       running", rendered)
+            self.assertIn("Current step: unit-integration-tests", rendered)
+            self.assertIn("passed=1", rendered)
+            self.assertIn("running=1", rendered)
+
     def test_release_profile_never_allows_dirty_override(self):
         with tempfile.TemporaryDirectory() as temporary:
             harness = qa_harness.Harness(

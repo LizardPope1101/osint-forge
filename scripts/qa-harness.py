@@ -271,6 +271,7 @@ class Harness:
                 "completed_at": None,
                 "plan_hash": plan_hash(self.plan),
                 "steps": {},
+                "current_step": None,
                 "failure": None,
             }
             self.write_state()
@@ -414,13 +415,17 @@ class Harness:
             self.state["failure"] = None
             self.write_state()
             self.event("run_started", profile=self.profile, commit=self.commit)
+            print(f"QA run: {self.run_dir}", flush=True)
+            print(f"Profile: {self.profile}", flush=True)
+            print(f"Commit: {self.commit}", flush=True)
             try:
                 for index, step in enumerate(self.plan, start=1):
                     previous = self.state["steps"].get(step["name"], {})
                     if previous.get("status") == "passed":
                         print(
                             f"SKIP {index:02d}/{len(self.plan):02d} "
-                            f"{step['name']} (verified)"
+                            f"{step['name']} (verified)",
+                            flush=True,
                         )
                         continue
                     self.execute_step(index, step)
@@ -431,13 +436,14 @@ class Harness:
                 self.mark_terminal("failed", str(error), exit_code=1)
                 return 1
             self.state["status"] = "passed"
+            self.state["current_step"] = None
             self.state["completed_at"] = utc_now()
             self.write_state()
             self.event("run_passed", commit=self.commit)
             self.write_manifest()
             self.enforce_private_modes()
-            print(f"PASS: {self.profile} QA completed for {self.commit}")
-            print(f"Evidence: {self.run_dir}")
+            print(f"PASS: {self.profile} QA completed for {self.commit}", flush=True)
+            print(f"Evidence: {self.run_dir}", flush=True)
             return 0
         finally:
             for signum, handler in previous_handlers.items():
@@ -445,16 +451,17 @@ class Harness:
 
     def mark_terminal(self, status: str, message: str, *, exit_code: int) -> None:
         self.state["status"] = status
+        self.state["current_step"] = None
         self.state["completed_at"] = utc_now()
         self.state["failure"] = {"message": message, "exit_code": exit_code}
         self.write_state()
         self.event(f"run_{status}", message=message, exit_code=exit_code)
         self.write_manifest()
         self.enforce_private_modes()
-        print(f"{status.upper()}: {message}", file=sys.stderr)
+        print(f"{status.upper()}: {message}", file=sys.stderr, flush=True)
         print(f"Resume with: {Path(__file__).relative_to(self.root)} "
               f"--profile {self.profile} --resume {shlex.quote(str(self.run_dir))}",
-              file=sys.stderr)
+              file=sys.stderr, flush=True)
 
     def execute_step(self, index: int, step: dict[str, Any]) -> None:
         name = step["name"]
@@ -469,9 +476,10 @@ class Harness:
             "log_sha256": None,
         }
         self.state["steps"][name] = result
+        self.state["current_step"] = name
         self.write_state()
         self.event("step_started", step=name, index=index)
-        print(f"RUN  {index:02d}/{len(self.plan):02d} {name}")
+        print(f"RUN  {index:02d}/{len(self.plan):02d} {name}", flush=True)
         with log_path.open("wb") as log:
             os.chmod(log_path, PRIVATE_FILE_MODE)
             heading = (
@@ -513,6 +521,7 @@ class Harness:
             exit_code=exit_code,
             log_sha256=sha256(log_path),
         )
+        self.state["current_step"] = None
         self.write_state()
         self.event(f"step_{result['status']}", step=name, exit_code=exit_code)
         if exit_code:
@@ -834,6 +843,39 @@ def verify_evidence(run_dir: Path) -> int:
     return 0
 
 
+def show_status(run_dir: Path) -> int:
+    run_dir = lexical_absolute(run_dir)
+    state_path = run_dir / "state.json"
+    if not state_path.is_file():
+        print(f"Missing QA state: {state_path}", file=sys.stderr)
+        return 1
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"Unreadable QA state: {error}", file=sys.stderr)
+        return 1
+    steps = state.get("steps", {})
+    counts: dict[str, int] = {}
+    for result in steps.values():
+        status = result.get("status", "unknown")
+        counts[status] = counts.get(status, 0) + 1
+    print(f"Run:          {state.get('run_id', run_dir.name)}")
+    print(f"Status:       {state.get('status', 'unknown')}")
+    print(f"Profile:      {state.get('profile', 'unknown')}")
+    print(f"Commit:       {state.get('commit', 'unknown')}")
+    print(f"Current step: {state.get('current_step') or 'none'}")
+    print(
+        "Steps:        "
+        + (", ".join(f"{name}={count}" for name, count in sorted(counts.items()))
+           or "none")
+    )
+    print(f"Started:      {state.get('started_at') or 'not started'}")
+    print(f"Completed:    {state.get('completed_at') or 'not completed'}")
+    if state.get("failure"):
+        print(f"Failure:      {state['failure'].get('message', 'unknown')}")
+    return 0
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", choices=PROFILES, default="development")
@@ -864,13 +906,24 @@ def parse_args() -> argparse.Namespace:
         metavar="RUN_DIRECTORY",
         help="Verify an existing evidence manifest and exit",
     )
+    parser.add_argument(
+        "--status",
+        type=Path,
+        metavar="RUN_DIRECTORY",
+        help="Show concise progress for an existing run and exit",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    if args.verify and args.status:
+        print("--verify and --status are mutually exclusive", file=sys.stderr)
+        return 2
     if args.verify:
         return verify_evidence(args.verify)
+    if args.status:
+        return show_status(args.status)
     harness: Harness | None = None
     try:
         harness = Harness(args)
