@@ -39,6 +39,8 @@ stable release, minor versions may include breaking changes.
 
 - Validate normalizer and report paths inside their plugin, raw-output, and
   case boundaries; reject symbolic-link traversal.
+- Reject symbolic links in CLI adapter and batch output paths before creating
+  or writing output artifacts.
 - Write reports and analyst reviews with owner-only permissions.
 
 ## 0.3.1 - 2026-07-29

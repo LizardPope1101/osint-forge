@@ -567,6 +567,58 @@ class ExecutionTests(unittest.TestCase):
                         "example", "username", "alice", output, True
                     )
 
+    def test_cli_refuses_symbolic_link_output_paths(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            outside = root / "outside"
+            outside.mkdir()
+            linked = root / "linked"
+            linked.symlink_to(outside, target_is_directory=True)
+            for output in (linked, linked / "nested"):
+                with self.subTest(output=output), self.assertRaisesRegex(
+                    RuntimeError, "symbolic-link"
+                ):
+                    osint_forge.cmd_run(
+                        argparse.Namespace(
+                            plugin="example",
+                            type="username",
+                            target="alice",
+                            output=output,
+                            dry_run=True,
+                        )
+                    )
+
+    def test_batch_refuses_symbolic_link_output_root(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "targets.txt"
+            source.write_text("[Usernames]\nalice\n", encoding="utf-8")
+            outside = root / "outside"
+            outside.mkdir()
+            output = root / "output"
+            output.symlink_to(outside, target_is_directory=True)
+            manifest = {
+                "id": "example",
+                "batch": True,
+                "supports": ["username"],
+            }
+            args = argparse.Namespace(
+                input=source,
+                output_root=output,
+                name="test",
+                plugins=[],
+                jobs=1,
+                dry_run=True,
+            )
+            with mock.patch.object(
+                osint_forge,
+                "catalog",
+                return_value={"example": (root, manifest)},
+            ), mock.patch.object(
+                osint_forge, "is_installed", return_value=True
+            ), self.assertRaisesRegex(RuntimeError, "symbolic-link"):
+                osint_forge.cmd_batch(args)
+
 
 class CliTests(unittest.TestCase):
     def test_version_command(self):

@@ -131,6 +131,19 @@ def secure_case_directory(path: Path, root: Path) -> None:
     secure_private_directory(path, root, "case")
 
 
+def safe_output_directory(requested: Path, context: str) -> Path:
+    """Return an absolute output path without following symbolic links."""
+    path = Path(os.path.abspath(requested.expanduser()))
+    current = Path(path.anchor)
+    for part in path.parts[1:]:
+        current /= part
+        if current.is_symlink():
+            raise RuntimeError(
+                f"Refusing symbolic-link {context} directory: {current}"
+            )
+    return path
+
+
 def open_private_log(path: Path):
     descriptor = os.open(
         path,
@@ -866,7 +879,7 @@ def run_adapter(plugin_id: str, target_type: str, value: str, output_dir: Path, 
 def cmd_run(args: argparse.Namespace) -> int:
     if not validate_target(args.type, args.target):
         raise SystemExit(f"Invalid {args.type}: {args.target}")
-    output = args.output.expanduser().resolve()
+    output = safe_output_directory(args.output, "output")
     return run_adapter(args.plugin, args.type, args.target, output, args.dry_run)
 
 
@@ -959,7 +972,8 @@ def cmd_batch(args: argparse.Namespace) -> int:
     if not jobs:
         print("No installed batch-capable plugins matched these target sections.", file=sys.stderr)
         return 1
-    run_dir = create_run_directory(args.output_root.expanduser().resolve(), args.name)
+    output_root = safe_output_directory(args.output_root, "batch output")
+    run_dir = create_run_directory(output_root, args.name)
     copied_input = run_dir / "targets-input.txt"
     shutil.copy2(source, copied_input)
     copied_input.chmod(0o600)
