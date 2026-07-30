@@ -66,6 +66,20 @@ The development check binds validation to the current source checkout, so an
 older system installation or separately installed plugin cannot substitute its
 framework files for the candidate under test.
 
+For a durable checkpoint with private, resumable evidence, run:
+
+```bash
+./scripts/qa-harness.py \
+  --profile development \
+  --allow-dirty \
+  --authorization "Development validation for issue or change"
+```
+
+The release process uses the stricter clean-tree `release` profile described in
+[`docs/QA-HARNESS.md`](docs/QA-HARNESS.md). Do not edit retained QA evidence or
+reuse it for a different commit; start a new run when the source or test plan
+changes.
+
 GitHub Actions repeats these checks and also runs ShellCheck and a Debian
 stable and Ubuntu 24.04 clean-install test. Python checks run across versions
 3.10 through 3.13.

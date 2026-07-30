@@ -6,6 +6,13 @@ in the project wiki. Complete every numbered step in order. Each step is a
 gate: verify it before beginning the next step. Do not skip, combine, reorder,
 or treat a pending check as complete.
 
+Use the repository's [QA harness](QA-HARNESS.md) for automated candidate
+validation. Release runs must use the `release` profile against the exact clean
+candidate ref. Retain and verify its private evidence directory before marking
+the automated gate complete. A disconnected AI or terminal session does not
+invalidate completed steps: resume is permitted only when the harness verifies
+the same commit, tree, version, plan, and passed-step evidence hashes.
+
 If that wiki page is revised, its newest published process governs subsequent
 releases. This file intentionally does not duplicate the checklist, which
 prevents two release procedures from drifting apart.
@@ -17,6 +24,8 @@ Debian stable VM after merge and before tagging. That gate may be
 human-operated with AI assistance or autonomously executed by an AI under
 explicit owner authorization. Both modes require complete retained evidence,
 fail-closed handling, and a patch-and-retest loop when defects are found.
+The QA harness provides the automated evidence ledger but does not replace the
+live Debian gate or its operational evidence.
 
 Publishing the GitHub release does not complete the process. The authoritative
 procedure includes a mandatory administrative closeout after publication:
