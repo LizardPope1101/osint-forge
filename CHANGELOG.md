@@ -9,6 +9,9 @@ stable release, minor versions may include breaking changes.
 
 ### Added
 
+- A canonical v1.0 product contract defining the three-seed-to-profile
+  workflow, information layers, temporal status, confidence scopes, recursive
+  stopping conditions, final-profile policy, and measurable accuracy criteria.
 - Versioned schema-2 plugin contracts declaring accepted and emitted entity
   types.
 - Deterministic, provenance-linked candidate entity extraction that remains

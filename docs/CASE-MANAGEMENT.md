@@ -154,9 +154,12 @@ confidence boundary.
 By v1.0, a case is intended to carry the complete evidence graph for a bounded
 investigation: supplied seeds, extracted candidates, relationships,
 contradictions, confidence assessments, queue decisions, analyst actions, and
-the rationale for each pursued lead. These capabilities will arrive through
-the versioned stages in the [Roadmap to v1.0](ROADMAP.md); the projection
-remains read-only in v0.5.
+the rationale for each pursued lead. Preserved evidence, the internal
+intelligence graph, and the confidence- and currentness-filtered final profile
+remain distinct layers. These capabilities will arrive through the versioned
+stages in the [Roadmap to v1.0](ROADMAP.md) and must satisfy the
+[v1.0 Product Contract](V1-PRODUCT-CONTRACT.md); the projection remains
+read-only in v0.5.
 
 ## Privacy and integrity
 

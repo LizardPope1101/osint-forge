@@ -5,12 +5,28 @@ are not automatically identity-resolved entities. See
 [Entity Model](ENTITY-MODEL.md) for the seed contract and future correlation
 boundary.
 
+The stable reporting destination is defined in the
+[v1.0 Product Contract](V1-PRODUCT-CONTRACT.md): preserved evidence, a complete
+internal intelligence graph, and a deterministic final profile are separate
+views.
+
 The [Roadmap to v1.0](ROADMAP.md) extends reporting from normalized tool output
 to evidence-backed intelligence. Future reports will preserve lower-confidence
 leads and contradictions internally while allowing a final intelligence view
 to apply an explicit confidence threshold. No automated score will replace raw
 evidence, source independence analysis, correlation rationale, or analyst
 judgment.
+
+Identity confidence and currentness are independent. A historically
+well-supported address or phone number must not appear as current merely
+because its identity relationship is strong or it is the newest available
+record.
+
+The v1.0 final profile includes only values meeting the selected identity and
+currentness policy. Historical, conflicting, unresolved, rejected, and
+lower-confidence observations remain explicitly available in the internal
+report. The report also records why collection stopped and never equates an
+exhausted queue with universal completeness.
 
 OSINT Forge converts heterogeneous tool output into a common finding contract
 without replacing raw evidence. Report schema 2 also carries deterministic
