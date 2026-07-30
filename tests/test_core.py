@@ -530,7 +530,10 @@ class ExecutionTests(unittest.TestCase):
 
     def test_stale_install_record_does_not_claim_missing_tool_is_installed(self):
         with tempfile.TemporaryDirectory() as temp:
-            with mock.patch.dict(
+            isolated_home = Path(temp) / "home"
+            isolated_home.mkdir()
+            with mock.patch.object(Path, "home", return_value=isolated_home), \
+                 mock.patch.dict(
                 os.environ,
                 {
                     "OSINT_FORGE_STATE": str(Path(temp) / "state"),
@@ -1195,6 +1198,12 @@ class CaseManagementTests(unittest.TestCase):
 
 
 class ShellScriptTests(unittest.TestCase):
+    def test_dev_check_uses_source_checkout(self):
+        script = (osint_forge.SOURCE_ROOT / "scripts/dev-check.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('export OSINT_FORGE_ROOT="$ROOT"', script)
+
     def test_source_framework_lifecycles_deploy_private_launchers(self):
         for plugin_id, entrypoint in (
             ("recon-ng", "recon-ng/.venv/bin/python"),

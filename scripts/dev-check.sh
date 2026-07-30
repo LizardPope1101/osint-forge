@@ -4,6 +4,7 @@
 set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+export OSINT_FORGE_ROOT="$ROOT"
 cd "$ROOT"
 
 python3 -m py_compile forge/*.py plugins/*/normalize.py
