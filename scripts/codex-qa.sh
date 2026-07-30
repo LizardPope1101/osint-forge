@@ -201,7 +201,7 @@ branch="$(git branch --show-current)"
 version="$(./bin/osint --version)"
 
 if [[ "$MODE" == "release" ]]; then
-    [[ "$branch" == "main" ]] || die "Release QA must start from branch main ; found: $branch"
+    [[ "$branch" == "main" ]] || die "Release QA must start from branch main; found: $branch"
     git fetch --quiet origin main
     remote_main="$(git rev-parse refs/remotes/origin/main)"
     [[ "$commit" == "$remote_main" ]] ||
@@ -215,7 +215,7 @@ umask 077
 mkdir -p "${EVIDENCE_ROOT}/codex-sessions"
 chmod 700 "$EVIDENCE_ROOT" "${EVIDENCE_ROOT}/codex-sessions"
 
-stamp="$(date -u +%Y%m%dT%H%MISZ)"
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 run_dir="${EVIDENCE_ROOT}/codex-sessions/${stamp}-${MODE}-${commit:0:12}"
 mkdir "$run_dir"
 chmod 700 "$run_dir"
@@ -252,7 +252,7 @@ Your task:
 4. Use only synthetic, reserved, loopback, operator-owned, or explicitly
    authorized targets. Never introduce real third-party personal data.
 5. If a defect or meaningful uncertainty is discovered, create a regression
-   test whenever technically practicable, implement the smallest sound fix on a
+   test whenever technically practical, implement the smallest sound fix on a
    focused branch, open a pull request, wait for every required hosted check,
    merge only when green, update documentation, refresh main, and restart all
    affected validation against the new exact commit.
@@ -313,12 +313,14 @@ fi
     printf ' %q' codex "${codex_args[@]}"
     echo ' )'
     echo 'set +e'
-    echo '"${codex_cmd[@]}" <"$prompt_file" 2>&1 | tee "$events_file"'
-    echo 'rc=${PIPESTATUS[0]}'
-    echo 'set -e'
-    echo 'printf "%s\n" "$rc" >"$exit_file"'
-    echo 'printf "Completed (UTC): %s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$metadata_file"'
-    echo 'exit "$rc"'
+    cat <<'RUNNER'
+"${codex_cmd[@]}" <"$prompt_file" 2>&1 | tee "$events_file"
+rc=${PIPESTATUS[0]}
+set -e
+printf "%s\n" "$rc" >"$exit_file"
+printf "Completed (UTC): %s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$metadata_file"
+exit "$rc"
+RUNNER
 } >"$runner_file"
 
 chmod 600 "$prompt_file" "${run_dir}/metadata.txt"
