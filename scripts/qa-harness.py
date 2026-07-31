@@ -16,10 +16,12 @@ import shlex
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
 from typing import Any, Callable
+import zipfile
 
 
 SCHEMA = 1
@@ -707,7 +709,7 @@ class Harness:
             tar_root.mkdir()
             zip_root.mkdir()
             shutil.unpack_archive(str(tar_path), str(tar_root), "tar")
-            shutil.unpack_archive(str(zip_path), str(zip_root), "zip")
+            self.unpack_git_zip(zip_path, zip_root)
             tar_files = self.directory_hashes(tar_root)
             zip_files = self.directory_hashes(zip_root)
             if tar_files != zip_files:
@@ -738,6 +740,26 @@ class Harness:
                             f"{label} archive check failed ({result.returncode}): "
                             f"{shlex.join(command)}"
                         )
+
+    @staticmethod
+    def unpack_git_zip(archive: Path, destination: Path) -> None:
+        """Extract a Git ZIP while retaining its recorded Unix file modes."""
+        destination = destination.resolve()
+        with zipfile.ZipFile(archive) as handle:
+            members = handle.infolist()
+            for member in members:
+                relative = Path(member.filename)
+                extracted = (destination / relative).resolve()
+                if destination not in (extracted, *extracted.parents):
+                    raise HarnessError(
+                        f"ZIP archive member escapes extraction root: {member.filename}"
+                    )
+            handle.extractall(destination)
+            for member in members:
+                extracted = (destination / member.filename).resolve()
+                mode = stat.S_IMODE(member.external_attr >> 16)
+                if mode and extracted.exists():
+                    extracted.chmod(mode)
 
     def check_hosted_checks(self, log: Any) -> None:
         if shutil.which("gh") is None:
