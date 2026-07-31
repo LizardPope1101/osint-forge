@@ -7,9 +7,11 @@ import hashlib
 import importlib.util
 import io
 from pathlib import Path
+import stat
 import tempfile
 import unittest
 from unittest import mock
+import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -212,6 +214,38 @@ class QaHarnessTests(unittest.TestCase):
                 qa_harness.HarnessError, "symbolic-link QA evidence path"
             ):
                 harness.initialize()
+
+    def test_git_zip_extraction_preserves_executable_modes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "source.zip"
+            destination = root / "extracted"
+            destination.mkdir()
+            member = zipfile.ZipInfo("bin/osint")
+            member.create_system = 3
+            member.external_attr = (stat.S_IFREG | 0o755) << 16
+            with zipfile.ZipFile(archive, "w") as handle:
+                handle.writestr(member, "#!/bin/sh\n")
+
+            qa_harness.Harness.unpack_git_zip(archive, destination)
+
+            extracted = destination / "bin" / "osint"
+            self.assertEqual(stat.S_IMODE(extracted.stat().st_mode), 0o755)
+
+    def test_git_zip_extraction_rejects_path_traversal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "source.zip"
+            destination = root / "extracted"
+            destination.mkdir()
+            with zipfile.ZipFile(archive, "w") as handle:
+                handle.writestr("../escaped", "unsafe\n")
+
+            with self.assertRaisesRegex(
+                qa_harness.HarnessError, "escapes extraction root"
+            ):
+                qa_harness.Harness.unpack_git_zip(archive, destination)
+            self.assertFalse((root / "escaped").exists())
 
 
 if __name__ == "__main__":

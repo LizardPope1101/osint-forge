@@ -64,6 +64,7 @@ The release profile additionally:
   commit;
 - creates Git tar and ZIP source archives;
 - proves their extracted contents are identical and contain no Git metadata;
+- restores and verifies Git-recorded executable modes when extracting ZIPs;
   and
 - runs the complete Python suite and plugin-contract validation independently
   from both extracted archives.
