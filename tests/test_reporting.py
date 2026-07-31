@@ -262,7 +262,7 @@ class ReportingTests(unittest.TestCase):
             status = {
                 "target_type": "domain",
                 "target": "example.com",
-                "framework_version": "0.5.0-dev",
+                "framework_version": "0.5.0",
                 "command": ["example", "example.com"],
                 "started_at": "2026-07-30T00:00:00+00:00",
             }
