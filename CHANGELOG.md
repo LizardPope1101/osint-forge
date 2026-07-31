@@ -7,6 +7,8 @@ stable release, minor versions may include breaking changes.
 
 ## Unreleased
 
+## 0.5.0 - 2026-07-30
+
 ### Added
 
 - A canonical v1.0 product contract defining the three-seed-to-profile
@@ -29,7 +31,7 @@ stable release, minor versions may include breaking changes.
 
 ### Changed
 
-- Development version is now `0.5.0-dev`.
+- Framework version is now `0.5.0`.
 - Normalized report schema 2 includes candidate observations and traceability
   integrity status while retaining schema-1 normalizer compatibility.
 
