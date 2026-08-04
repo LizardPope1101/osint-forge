@@ -41,6 +41,8 @@ stable release, minor versions may include breaking changes.
 
 - Report corrupted case bundles as controlled CLI errors instead of exposing
   an uncaught archive-validation traceback.
+- Resume release QA with the candidate ref recorded in its durable state, as
+  documented and printed by the harness, while still revalidating that ref.
 
 ## 0.5.0 - 2026-07-30
 

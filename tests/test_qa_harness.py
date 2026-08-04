@@ -52,6 +52,8 @@ class QaHarnessTests(unittest.TestCase):
                 return str(ROOT)
             if arguments == ("rev-parse", "HEAD^{commit}"):
                 return "a" * 40
+            if arguments == ("rev-parse", "origin/main^{commit}"):
+                return "a" * 40
             if arguments == ("status", "--porcelain=v1", "--untracked-files=all"):
                 return ""
             raise AssertionError(f"Unexpected Git call: {arguments!r}")
@@ -98,6 +100,33 @@ class QaHarnessTests(unittest.TestCase):
                 qa_harness.HarnessError, "evidence changed"
             ):
                 rejected.initialize()
+
+    def test_release_resume_reuses_recorded_candidate_ref(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+             mock.patch.object(qa_harness, "build_plan", return_value=[]), \
+             mock.patch.object(qa_harness.Harness, "validate_remote_candidate"):
+            evidence = Path(temporary)
+            first = qa_harness.Harness(arguments(
+                evidence,
+                profile="release",
+                candidate_ref="origin/main",
+                allow_dirty=False,
+            ))
+            first.initialize()
+            run_dir = first.run_dir
+            first.release_lock()
+
+            resumed = qa_harness.Harness(arguments(
+                evidence,
+                profile="release",
+                resume=run_dir,
+                allow_dirty=False,
+            ))
+            resumed.initialize()
+            try:
+                self.assertEqual(resumed.args.candidate_ref, "origin/main")
+            finally:
+                resumed.release_lock()
 
     def test_failed_step_records_exit_code_and_is_resumable(self):
         failing = [

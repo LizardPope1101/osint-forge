@@ -297,6 +297,14 @@ class Harness:
                     f"Resume mismatch for {key}: expected {value!r}, "
                     f"recorded {self.state.get(key)!r}"
                 )
+        recorded_candidate = self.state.get("candidate_ref")
+        if self.args.candidate_ref and self.args.candidate_ref != recorded_candidate:
+            raise HarnessError(
+                "Resume mismatch for candidate_ref: "
+                f"requested {self.args.candidate_ref!r}, recorded {recorded_candidate!r}"
+            )
+        if not self.args.candidate_ref:
+            self.args.candidate_ref = recorded_candidate
         for name, result in self.state.get("steps", {}).items():
             if result.get("status") != "passed":
                 continue
