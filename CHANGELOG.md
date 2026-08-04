@@ -19,13 +19,23 @@ stable release, minor versions may include breaking changes.
 - A conservative built-in `public-identity` workflow profile and execution
   through `osint case run --workflow public-identity`.
 - Workflow profile and catalog-reference checks in `osint forge validate`.
+- Versioned SHA-256 case integrity manifests with missing, modified, and
+  unexpected artifact detection.
+- Deterministic full-fidelity case bundles with independent verification and
+  fail-closed, owner-only import.
+- Conservatively redacted inspection-only bundles that exclude raw evidence,
+  target values, commands, paths, authorization details, and analyst notes.
+- Bundle defenses for traversal, links, special files, duplicate members,
+  corruption, schema mismatches, and unsafe overwrites.
 
 ### Changed
 
-- Framework development version is now `0.6.0-dev`.
+- Framework development version is now `0.7.0-dev`.
 - Workflow-backed runs preserve the exact resolved plan and workflow digest,
   cap concurrency to the declared bound, and enforce per-stage adapter
   timeouts while retaining existing case resume behavior.
+- Evidence integrity is explicitly tamper-evident rather than a claim of
+  authenticity, forensic certification, or legal chain of custody.
 
 ## 0.5.0 - 2026-07-30
 

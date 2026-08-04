@@ -20,13 +20,14 @@ import time
 from typing import Any, Iterable
 
 try:
-    from . import entities, reporting, workflows
+    from . import entities, integrity, reporting, workflows
 except ImportError:
     import entities
+    import integrity
     import reporting
     import workflows
 
-__version__ = "0.6.0-dev"
+__version__ = "0.7.0-dev"
 
 SYSTEM_ROOT = Path("/usr/local/share/osint-forge")
 STATE_ROOT = Path.home() / ".local/state/osint-forge"
@@ -1749,6 +1750,192 @@ def cmd_case_annotate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_case_integrity(args: argparse.Namespace) -> int:
+    path, metadata = load_case(args.case)
+    manifest_path = path / integrity.MANIFEST_NAME
+    if args.action == "create":
+        manifest = integrity.build_manifest(
+            path, case_id=args.case, framework_version=__version__
+        )
+        write_private_json(manifest_path, manifest)
+        print(f"Integrity manifest: {manifest_path}")
+        print(f"Hashed {len(manifest['artifacts'])} artifact(s).")
+        return 0
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise SystemExit(f"{args.case}: no integrity manifest; run 'case integrity create' first") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{args.case}: invalid integrity manifest: {exc}") from exc
+    result = integrity.verify_manifest(path, manifest)
+    if args.json:
+        print(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        print(f"Integrity: {'PASS' if result['valid'] else 'FAIL'}")
+        print(f"Verified: {result['verified']}")
+        for field in ("missing", "modified", "unexpected"):
+            for item in result[field]:
+                print(f"{field.upper():<10} {item}")
+    return 0 if result["valid"] else 1
+
+
+def _full_bundle_members(path: Path, metadata: dict[str, Any]) -> dict[str, bytes]:
+    members = {
+        artifact.relative_to(path).as_posix(): artifact.read_bytes()
+        for artifact in integrity._case_files(path)
+    }
+    report = build_case_report(path, metadata)
+    projection = entities.build_case_entities(
+        metadata, report["candidates"], canonical_entity_value
+    )
+    artifact_digests = {
+        name: hashlib.sha256(content).hexdigest()
+        for name, content in members.items()
+    }
+    for entity in projection["entities"]:
+        for source in entity["sources"]:
+            source_file = source.get("source_file")
+            if source_file in artifact_digests:
+                source["artifact"] = {
+                    "path": source_file,
+                    "sha256": artifact_digests[source_file],
+                    "algorithm": "sha256",
+                }
+    projection["integrity_binding"] = {
+        "schema": 1,
+        "policy": "source paths bind to verified bundle artifacts when available",
+    }
+    members["intelligence/entities.json"] = (
+        json.dumps(projection, indent=2, sort_keys=True).encode() + b"\n"
+    )
+    manifest = {
+        "schema": integrity.INTEGRITY_SCHEMA,
+        "algorithm": "sha256",
+        "case_id": metadata["id"],
+        "framework_version": __version__,
+        "artifacts": [
+            {
+                "path": name,
+                "sha256": hashlib.sha256(content).hexdigest(),
+                "size": len(content),
+            }
+            for name, content in sorted(members.items())
+        ],
+    }
+    members[integrity.MANIFEST_NAME] = (
+        json.dumps(manifest, indent=2, sort_keys=True).encode() + b"\n"
+    )
+    return members
+
+
+def _redacted_bundle_members(path: Path, metadata: dict[str, Any]) -> dict[str, bytes]:
+    report = reporting.redact_report(build_case_report(path, metadata))
+    projection = entities.build_case_entities(
+        metadata, build_case_report(path, metadata)["candidates"], canonical_entity_value
+    )
+    redacted_entities = {
+        "schema": projection["schema"],
+        "case_id": "shared-case",
+        "entity_count": projection["entity_count"],
+        "entities": [
+            {
+                "id": f"entity-{index:03d}", "type": item["type"],
+                "origin": item["origin"], "value": "[REDACTED]",
+                "canonical_value": "[REDACTED]",
+                "confidence": item["confidence"],
+                "source_count": len(item["sources"]),
+            }
+            for index, item in enumerate(projection["entities"], 1)
+        ],
+        "relationship_count": len(projection["relationships"]),
+        "relationships": [],
+    }
+    summary = {
+        "schema": 1,
+        "id": "shared-case",
+        "purpose": "[REDACTED]",
+        "authorization_scope": "[REDACTED]",
+        "created_at": metadata["created_at"],
+        "updated_at": metadata["updated_at"],
+        "target_count": len(metadata["targets"]),
+        "job_count": len(metadata["jobs"]),
+        "redaction": "conservative; raw evidence, targets, commands, paths, and analyst notes excluded",
+    }
+    return {
+        "case-summary.json": json.dumps(summary, indent=2, sort_keys=True).encode() + b"\n",
+        "entities.json": json.dumps(redacted_entities, indent=2, sort_keys=True).encode() + b"\n",
+        "report.json": json.dumps(report, indent=2, sort_keys=True).encode() + b"\n",
+    }
+
+
+def cmd_case_export(args: argparse.Namespace) -> int:
+    path, metadata = load_case(args.case)
+    output = args.output.expanduser().resolve()
+    if output.exists() and not args.force:
+        raise SystemExit(f"Export already exists: {output}; use --force to replace it.")
+    members = (
+        _redacted_bundle_members(path, metadata)
+        if args.mode == "redacted" else _full_bundle_members(path, metadata)
+    )
+    bundle_case_id = "shared-case" if args.mode == "redacted" else args.case
+    manifest = integrity.bundle_manifest(
+        bundle_case_id, __version__, args.mode, members
+    )
+    integrity.write_bundle(output, manifest, members)
+    verified, _ = integrity.inspect_bundle(output)
+    print(f"Export ({verified['mode']}): {output}")
+    print(f"Artifacts: {len(verified['artifacts'])} | SHA-256 verified")
+    return 0
+
+
+def cmd_case_bundle_inspect(args: argparse.Namespace) -> int:
+    manifest, _ = integrity.inspect_bundle(args.bundle.expanduser().resolve())
+    if args.json:
+        print(json.dumps(manifest, indent=2, sort_keys=True))
+    else:
+        print("Bundle: PASS")
+        print(f"Case: {manifest['case_id']} | Mode: {manifest['mode']}")
+        print(f"Artifacts: {len(manifest['artifacts'])}")
+    return 0
+
+
+def cmd_case_import(args: argparse.Namespace) -> int:
+    bundle = args.bundle.expanduser().resolve()
+    manifest, members = integrity.inspect_bundle(bundle)
+    if manifest.get("mode") != "full":
+        raise SystemExit("Redacted bundles are inspection-only and cannot become live cases.")
+    imported_id = manifest.get("case_id")
+    if not isinstance(imported_id, str):
+        raise SystemExit("Bundle does not contain a valid case ID.")
+    if args.case and args.case != imported_id:
+        raise SystemExit("Imported case ID must match the bundle; renaming would invalidate provenance.")
+    validate_case_id(imported_id)
+    destination = case_path(imported_id, must_exist=False)
+    if destination.exists():
+        raise SystemExit(f"Case already exists: {imported_id}")
+    destination.mkdir(mode=0o700)
+    try:
+        for name, content in sorted(members.items()):
+            relative = Path(integrity.safe_member(name))
+            target = destination / relative
+            target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            target.parent.chmod(0o700)
+            descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | NOFOLLOW, 0o600)
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(content)
+        _, loaded = load_case(imported_id)
+        case_manifest = json.loads((destination / integrity.MANIFEST_NAME).read_text(encoding="utf-8"))
+        result = integrity.verify_manifest(destination, case_manifest)
+        if not result["valid"] or loaded["id"] != imported_id:
+            raise integrity.IntegrityError("imported case failed independent verification")
+    except BaseException:
+        shutil.rmtree(destination)
+        raise
+    print(f"Imported verified case: {imported_id}")
+    print(f"Location: {destination}")
+    return 0
+
+
 def cmd_categories(args: argparse.Namespace) -> int:
     groups: dict[str, list[str]] = {}
     for pid, (_, m) in catalog().items():
@@ -1970,6 +2157,29 @@ def build_parser() -> argparse.ArgumentParser:
     note_group.add_argument("--note")
     note_group.add_argument("--clear-note", action="store_true")
     p.set_defaults(func=cmd_case_annotate)
+
+    p = cs.add_parser("integrity", help="create or verify a case integrity manifest")
+    p.add_argument("action", choices=("create", "verify"))
+    p.add_argument("case")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_case_integrity)
+
+    p = cs.add_parser("export", help="create a deterministic verified case bundle")
+    p.add_argument("case")
+    p.add_argument("--mode", choices=("full", "redacted"), default="full")
+    p.add_argument("-o", "--output", type=Path, required=True)
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(func=cmd_case_export)
+
+    p = cs.add_parser("inspect", help="verify and inspect a case bundle without importing it")
+    p.add_argument("bundle", type=Path)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_case_bundle_inspect)
+
+    p = cs.add_parser("import", help="safely import a verified full-fidelity bundle")
+    p.add_argument("bundle", type=Path)
+    p.add_argument("--case", help="require this case ID")
+    p.set_defaults(func=cmd_case_import)
 
     return parser
 

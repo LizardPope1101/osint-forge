@@ -30,7 +30,7 @@ exact-commit, tamper-evident validation is provided by the
 Clone the latest stable tag:
 
 ```bash
-git clone --branch v0.4.0 https://github.com/LizardPope1101/osint-forge.git
+git clone --branch v0.5.0 https://github.com/LizardPope1101/osint-forge.git
 cd osint-forge
 chmod +x bootstrap.sh
 ./bootstrap.sh
@@ -177,6 +177,22 @@ surface coverage gaps, record information-gain rationale, and enforce declared
 concurrency and timeout bounds. They do not infer identity, execute arbitrary
 shell text, or recursively pursue extracted candidates. See
 [`docs/CASE-MANAGEMENT.md`](docs/CASE-MANAGEMENT.md).
+
+The v0.7 development line makes case artifacts tamper-evident and portable:
+
+```bash
+osint case integrity create example-case
+osint case integrity verify example-case
+osint case export example-case --mode full -o ./example-case.osint-case
+osint case inspect ./example-case.osint-case
+osint case import ./example-case.osint-case
+```
+
+Full bundles preserve the case and its evidence. Redacted bundles omit raw
+evidence and sensitive operator data and are inspection-only. Bundles are
+deterministic, SHA-256 verified, owner-only, and reject traversal, links,
+special files, duplicate members, and corruption. See
+[`docs/EVIDENCE-INTEGRITY.md`](docs/EVIDENCE-INTEGRITY.md).
 
 ## Modular plugin system
 

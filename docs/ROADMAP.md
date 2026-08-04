@@ -120,6 +120,12 @@ Tracking: [issue #14](https://github.com/LizardPope1101/osint-forge/issues/14)
 - Produce safe full-fidelity and conservatively redacted bundles.
 - Detect traversal, unsafe links, corruption, and redaction failures.
 
+Implementation status: versioned SHA-256 manifests, deterministic full and
+redacted bundles, independent inspection, safe full-case import, conservative
+redaction, and traversal/link/special-file/corruption defenses are implemented
+on the v0.7 development line. Live Debian validation remains required before
+release.
+
 ### v0.8 — Correlation and confidence
 
 Tracking: [issue #15](https://github.com/LizardPope1101/osint-forge/issues/15)
