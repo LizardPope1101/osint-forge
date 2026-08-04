@@ -36,12 +36,40 @@ Preview compatible commands without executing tools:
 osint case run example-case --dry-run
 ```
 
+Resolve the conservative built-in public-identity workflow without starting
+any plugin or making any network request:
+
+```bash
+osint case plan example-case --workflow public-identity
+osint case plan example-case --workflow public-identity --json
+osint case plan example-case --workflow public-identity -o ./plan.json
+```
+
+The plan treats every supplied seed as a separate entity. Co-reference is not
+assumed. It records why each plugin/entity pair was selected, skipped, or
+rejected; each stage's purpose and expected information gain; the installed
+plugin version; concurrency and timeout bounds; and any seed type for which no
+installed workflow plugin provides coverage. Named profiles live in
+`workflows/`; an explicit JSON file can be supplied instead. Workflow files
+reject unknown fields, unsupported future schemas, duplicate values, missing
+dependencies, dependency cycles, and symbolic links.
+
 Run every compatible installed batch plugin, or select specific plugins:
 
 ```bash
 osint case run example-case
 osint case run example-case --plugins maigret sherlock --jobs 2
+osint case run example-case --workflow public-identity --jobs 4
 ```
+
+`--workflow` and `--plugins` are mutually exclusive. A workflow run executes
+only jobs selected by the same deterministic resolver used by `case plan`,
+caps requested parallelism to the workflow maximum, enforces declared adapter
+timeouts, records the complete resolved plan in `run.json`, and uses the
+existing stable job identifiers for retry and resume behavior. Workflows are
+not shell runners: plugin commands still come only from validated manifest
+adapter arrays. Newly extracted candidates are never scheduled recursively in
+v0.6.
 
 Inspect progress and create a local summary:
 
@@ -159,7 +187,7 @@ intelligence graph, and the confidence- and currentness-filtered final profile
 remain distinct layers. These capabilities will arrive through the versioned
 stages in the [Roadmap to v1.0](ROADMAP.md) and must satisfy the
 [v1.0 Product Contract](V1-PRODUCT-CONTRACT.md); the projection remains
-read-only in v0.5.
+read-only in v0.6; workflows operate only on operator-supplied case targets.
 
 ## Privacy and integrity
 

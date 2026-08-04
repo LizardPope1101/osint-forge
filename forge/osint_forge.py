@@ -20,12 +20,13 @@ import time
 from typing import Any, Iterable
 
 try:
-    from . import entities, reporting
+    from . import entities, reporting, workflows
 except ImportError:
     import entities
     import reporting
+    import workflows
 
-__version__ = "0.5.0"
+__version__ = "0.6.0-dev"
 
 SYSTEM_ROOT = Path("/usr/local/share/osint-forge")
 STATE_ROOT = Path.home() / ".local/state/osint-forge"
@@ -63,6 +64,26 @@ def state_root() -> Path:
 
 def plugin_root() -> Path:
     return forge_root() / "plugins"
+
+
+def workflow_root() -> Path:
+    return forge_root() / "workflows"
+
+
+def resolve_workflow(reference: str) -> tuple[Path, dict[str, Any]]:
+    """Load a named built-in profile or an explicit JSON workflow path."""
+    requested = Path(reference).expanduser()
+    if requested.name != reference or requested.suffix:
+        path = requested.resolve()
+    else:
+        if not workflows.ID_RE.fullmatch(reference):
+            raise SystemExit("Workflow names must use lowercase letters, numbers, and hyphens.")
+        path = workflow_root() / f"{reference}.json"
+    try:
+        workflow = workflows.load_workflow(path)
+    except workflows.WorkflowError as exc:
+        raise SystemExit(str(exc)) from exc
+    return path, workflow
 
 
 def now() -> str:
@@ -866,7 +887,14 @@ def adapter_command(
     return result
 
 
-def run_adapter(plugin_id: str, target_type: str, value: str, output_dir: Path, dry_run: bool) -> int:
+def run_adapter(
+    plugin_id: str,
+    target_type: str,
+    value: str,
+    output_dir: Path,
+    dry_run: bool,
+    timeout_seconds: int | None = None,
+) -> int:
     plugin_dir, manifest = require_plugin(plugin_id)
     if not is_installed(plugin_id) and not dry_run:
         print(f"MISS     {plugin_id}: not installed", file=sys.stderr)
@@ -895,8 +923,13 @@ def run_adapter(plugin_id: str, target_type: str, value: str, output_dir: Path, 
                 env=env,
                 umask=0o077,
                 check=False,
+                timeout=timeout_seconds,
             )
             exit_code = completed.returncode
+        except subprocess.TimeoutExpired:
+            error = f"adapter exceeded workflow timeout of {timeout_seconds} seconds"
+            exit_code = 124
+            print(f"ERROR: {error}", file=err)
         except OSError as exc:
             error = str(exc)
             exit_code = 127 if isinstance(exc, FileNotFoundError) else 126
@@ -1143,7 +1176,32 @@ def cmd_case_run(args: argparse.Namespace) -> int:
     path, metadata = load_case(args.case)
     if not metadata["targets"]:
         raise SystemExit(f"{args.case}: add at least one target before running the case")
-    jobs = case_jobs(metadata, args.plugins, include_uninstalled=args.dry_run)
+    resolved_plan = None
+    if getattr(args, "workflow", None):
+        if args.plugins:
+            raise SystemExit("Use either --workflow or --plugins, not both.")
+        workflow_path, workflow = resolve_workflow(args.workflow)
+        resolved_plan = workflows.resolve_plan(
+            workflow, metadata, catalog(), is_installed
+        )
+        selected = {
+            (job["plugin"], job["entity_id"])
+            for job in resolved_plan["scheduled_jobs"]
+        }
+        jobs = [
+            (job[0], {
+                **job[1],
+                "_workflow": next(
+                    item for item in resolved_plan["scheduled_jobs"]
+                    if (item["plugin"], item["entity_id"]) == (job[0], job[2]["id"])
+                ),
+            }, job[2])
+            for job in case_jobs(metadata, [], include_uninstalled=False)
+            if (job[0], job[2]["id"]) in selected
+        ]
+    else:
+        workflow_path = None
+        jobs = case_jobs(metadata, args.plugins, include_uninstalled=args.dry_run)
     if not jobs:
         print("No compatible installed plugins matched the case targets.", file=sys.stderr)
         return 1
@@ -1182,6 +1240,8 @@ def cmd_case_run(args: argparse.Namespace) -> int:
         "status": "running",
         "dry_run": args.dry_run,
         "requested_plugins": args.plugins,
+        "workflow_source": str(workflow_path) if workflow_path else None,
+        "resolved_plan": resolved_plan,
         "skipped_jobs": skipped,
         "planned_jobs": [],
         "results": [],
@@ -1205,6 +1265,14 @@ def cmd_case_run(args: argparse.Namespace) -> int:
                 plugin_dir, manifest, target["type"], target["value"], output
             ),
             "output": str(output.relative_to(path)),
+            "workflow_stage": manifest.get("_workflow", {}).get("stage"),
+            "purpose": manifest.get("_workflow", {}).get("purpose"),
+            "expected_information_gain": manifest.get("_workflow", {}).get(
+                "expected_information_gain"
+            ),
+            "timeout_seconds": manifest.get("_workflow", {}).get(
+                "timeout_seconds"
+            ),
         })
     write_private_json(run_dir / "run.json", run_metadata)
     append_case_activity(
@@ -1251,9 +1319,20 @@ def cmd_case_run(args: argparse.Namespace) -> int:
             write_private_json(output / "status.json", preview)
             print(f"DRY      {plugin_id}: {shlex.join(command)}")
             return identifier, preview, output
-        rc = run_adapter(
-            plugin_id, target["type"], target["value"], output, False
-        )
+        timeout_seconds = manifest.get("_workflow", {}).get("timeout_seconds")
+        if timeout_seconds is None:
+            rc = run_adapter(
+                plugin_id, target["type"], target["value"], output, False
+            )
+        else:
+            rc = run_adapter(
+                plugin_id,
+                target["type"],
+                target["value"],
+                output,
+                False,
+                timeout_seconds,
+            )
         status_path = output / "status.json"
         if status_path.is_file():
             result = json.loads(status_path.read_text(encoding="utf-8"))
@@ -1275,22 +1354,54 @@ def cmd_case_run(args: argparse.Namespace) -> int:
         write_private_json(status_path, result)
         return identifier, result, output
 
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs)
-    future_jobs = {executor.submit(execute, job): job for job in pending}
+    worker_limit = args.jobs
+    if resolved_plan is not None:
+        worker_limit = min(worker_limit, resolved_plan["max_concurrency"])
     interrupted = False
-    try:
-        for future in concurrent.futures.as_completed(future_jobs):
-            job = future_jobs[future]
-            try:
-                identifier, result, output = future.result()
-            except Exception as exc:
-                identifier, plugin_id, manifest, target = job
-                output = (
-                    raw_root
-                    / f"{target['type']}s"
-                    / safe_slug(target["value"])
-                    / plugin_id
-                )
+    failed_stages: set[str] = set()
+    stage_dependencies = {
+        stage["id"]: set(stage["depends_on"])
+        for stage in (resolved_plan or {}).get("stages", [])
+    }
+    stage_groups = [(None, pending)]
+    if resolved_plan is not None:
+        stage_groups = [
+            (
+                stage_id,
+                [
+                    job for job in pending
+                    if job[2].get("_workflow", {}).get("stage") == stage_id
+                ],
+            )
+            for stage_id in resolved_plan["stage_order"]
+        ]
+
+    def record_result(identifier, result, output):
+        relative_output = str(output.relative_to(path))
+        state = {
+            "status": (
+                "previewed"
+                if args.dry_run
+                else ("completed" if result["exit_code"] == 0 else "failed")
+            ),
+            "exit_code": result["exit_code"],
+            "plugin": result["plugin"],
+            "plugin_version": result["plugin_version"],
+            "target_id": result["target_id"],
+            "last_run": run_id,
+            "output": relative_output,
+            "completed_at": result["completed_at"],
+        }
+        metadata["jobs"][identifier] = state
+        run_metadata["results"].append({"job_id": identifier, **state})
+
+    for stage_id, stage_pending in stage_groups:
+        if interrupted or not stage_pending:
+            continue
+        blocked_by = sorted(stage_dependencies.get(stage_id, set()) & failed_stages)
+        if blocked_by:
+            for identifier, plugin_id, manifest, target in stage_pending:
+                output = raw_root / f"{target['type']}s" / safe_slug(target["value"]) / plugin_id
                 secure_case_directory(output, raw_root)
                 result = {
                     "plugin": plugin_id,
@@ -1299,36 +1410,53 @@ def cmd_case_run(args: argparse.Namespace) -> int:
                     "target_id": target["id"],
                     "target_type": target["type"],
                     "target": target["value"],
-                    "exit_code": 70,
-                    "error": f"internal execution error: {exc}",
+                    "exit_code": 125,
+                    "error": f"workflow stage blocked by failed dependencies: {', '.join(blocked_by)}",
                     "completed_at": now(),
                 }
                 write_private_json(output / "status.json", result)
-            relative_output = str(output.relative_to(path))
-            state = {
-                "status": (
-                    "previewed"
-                    if args.dry_run
-                    else ("completed" if result["exit_code"] == 0 else "failed")
-                ),
-                "exit_code": result["exit_code"],
-                "plugin": result["plugin"],
-                "plugin_version": result["plugin_version"],
-                "target_id": result["target_id"],
-                "last_run": run_id,
-                "output": relative_output,
-                "completed_at": result["completed_at"],
-            }
-            metadata["jobs"][identifier] = state
-            run_metadata["results"].append({"job_id": identifier, **state})
-    except KeyboardInterrupt:
-        interrupted = True
-        for future in future_jobs:
-            future.cancel()
-    finally:
-        # Running workers cannot be cancelled. Wait for them to settle before
-        # writing final provenance or allowing temporary/case storage cleanup.
-        executor.shutdown(wait=True, cancel_futures=interrupted)
+                record_result(identifier, result, output)
+            failed_stages.add(stage_id)
+            continue
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=worker_limit)
+        future_jobs = {executor.submit(execute, job): job for job in stage_pending}
+        try:
+            for future in concurrent.futures.as_completed(future_jobs):
+                job = future_jobs[future]
+                try:
+                    identifier, result, output = future.result()
+                except Exception as exc:
+                    identifier, plugin_id, manifest, target = job
+                    output = (
+                        raw_root
+                        / f"{target['type']}s"
+                        / safe_slug(target["value"])
+                        / plugin_id
+                    )
+                    secure_case_directory(output, raw_root)
+                    result = {
+                        "plugin": plugin_id,
+                        "plugin_version": manifest["plugin_version"],
+                        "framework_version": __version__,
+                        "target_id": target["id"],
+                        "target_type": target["type"],
+                        "target": target["value"],
+                        "exit_code": 70,
+                        "error": f"internal execution error: {exc}",
+                        "completed_at": now(),
+                    }
+                    write_private_json(output / "status.json", result)
+                record_result(identifier, result, output)
+                if result["exit_code"] != 0 and stage_id is not None:
+                    failed_stages.add(stage_id)
+        except KeyboardInterrupt:
+            interrupted = True
+            for future in future_jobs:
+                future.cancel()
+        finally:
+            # Running workers cannot be cancelled. Wait before finalizing
+            # provenance or starting a dependent workflow stage.
+            executor.shutdown(wait=True, cancel_futures=interrupted)
 
     run_metadata["completed_at"] = now()
     if interrupted:
@@ -1355,6 +1483,47 @@ def cmd_case_run(args: argparse.Namespace) -> int:
     )
     print(f"Completed with {failures} failed job(s).")
     return 1 if failures else 0
+
+
+def cmd_case_plan(args: argparse.Namespace) -> int:
+    """Resolve a workflow without invoking adapters or making network calls."""
+    path, metadata = load_case(args.case)
+    if not metadata["targets"]:
+        raise SystemExit(f"{args.case}: add at least one target before planning")
+    workflow_path, workflow = resolve_workflow(args.workflow)
+    plan = workflows.resolve_plan(workflow, metadata, catalog(), is_installed)
+    plan["framework_version"] = __version__
+    plan["workflow_source"] = str(workflow_path)
+    if args.output:
+        output = safe_output_directory(args.output, "plan output")
+        write_private_json(output, plan)
+        print(f"Plan: {output}")
+    if args.json:
+        print(json.dumps(plan, indent=2, sort_keys=True))
+    else:
+        print(f"Case: {args.case} | Workflow: {workflow['id']} | Schema: {workflow['schema']}")
+        print(f"Identity assumption: none | Max concurrency: {plan['max_concurrency']}")
+        for decision in plan["decisions"]:
+            entity = decision["entity_type"] or "-"
+            print(
+                f"{decision['decision'].upper():<8} {decision['stage']:<20} "
+                f"{decision['plugin']:<14} {entity:<8} {decision['reason']}"
+            )
+        for gap in plan["coverage_gaps"]:
+            print(f"GAP      {gap['entity_type']}: {gap['reason']}")
+        print(
+            f"Selected {len(plan['scheduled_jobs'])} job(s); "
+            f"{len(plan['coverage_gaps'])} coverage gap(s). No commands executed."
+        )
+    append_case_activity(
+        path,
+        "workflow_planned",
+        workflow=workflow["id"],
+        workflow_sha256=plan["workflow"]["sha256"],
+        selected_jobs=len(plan["scheduled_jobs"]),
+        coverage_gaps=len(plan["coverage_gaps"]),
+    )
+    return 0
 
 
 def case_status_data(metadata: dict[str, Any]) -> dict[str, Any]:
@@ -1604,8 +1773,32 @@ def cmd_validate(args: argparse.Namespace) -> int:
         errors.extend(plugin_errors)
         warnings.extend(plugin_warnings)
 
+    workflow_files = sorted(workflow_root().glob("*.json")) if workflow_root().exists() else []
+    if not workflow_files:
+        errors.append("no workflow profiles found")
+    workflow_ids: set[str] = set()
+    for workflow_file in workflow_files:
+        try:
+            workflow = workflows.load_workflow(workflow_file)
+            if workflow["id"] in workflow_ids:
+                errors.append(f"duplicate workflow id: {workflow['id']}")
+            workflow_ids.add(workflow["id"])
+            declared_plugins = {
+                plugin_id
+                for stage in workflow["stages"]
+                for plugin_id in stage["plugins"]
+            }
+            unknown = sorted(declared_plugins - {directory.name for directory in directories})
+            if unknown:
+                errors.append(
+                    f"{workflow_file.name}: unknown plugins: {', '.join(unknown)}"
+                )
+        except workflows.WorkflowError as exc:
+            errors.append(f"{workflow_file.name}: {exc}")
+
     payload = {
         "plugin_count": len(directories),
+        "workflow_count": len(workflow_files),
         "errors": errors,
         "warnings": warnings,
         "valid": not errors,
@@ -1620,7 +1813,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
         status = "valid" if not errors else "invalid"
         print(
             f"Validated {len(directories)} plugin(s): "
-            f"{len(errors)} error(s), {len(warnings)} warning(s) — {status}"
+            f"{len(workflow_files)} workflow(s), {len(errors)} error(s), "
+            f"{len(warnings)} warning(s) — {status}"
         )
     return 1 if errors else 0
 
@@ -1717,8 +1911,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--plugins", nargs="*", default=[])
     p.add_argument("--jobs", type=int, default=2, choices=range(1, 9), metavar="1-8")
     p.add_argument("--rerun", action="store_true", help="rerun successful jobs")
+    p.add_argument(
+        "--workflow",
+        help="named built-in workflow or explicit JSON workflow path",
+    )
     p.add_argument("-n", "--dry-run", action="store_true")
     p.set_defaults(func=cmd_case_run)
+
+    p = cs.add_parser("plan", help="preview a resolved workflow without network activity")
+    p.add_argument("case")
+    p.add_argument("--workflow", default="public-identity")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("-o", "--output", type=Path)
+    p.set_defaults(func=cmd_case_plan)
 
     p = cs.add_parser("status", help="show case target and execution status")
     p.add_argument("case")

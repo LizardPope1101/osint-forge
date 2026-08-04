@@ -7,6 +7,26 @@ stable release, minor versions may include breaking changes.
 
 ## Unreleased
 
+### Added
+
+- Versioned declarative investigation workflows with strict unknown-field,
+  future-version, dependency-cycle, duplicate-value, and symbolic-link
+  rejection.
+- Deterministic multi-seed workflow planning through `osint case plan`, with
+  no seed co-reference assumption and no adapter or network execution.
+- Explainable selected, skipped, and rejected plugin/entity decisions,
+  expected information gain, stage purpose, and explicit coverage gaps.
+- A conservative built-in `public-identity` workflow profile and execution
+  through `osint case run --workflow public-identity`.
+- Workflow profile and catalog-reference checks in `osint forge validate`.
+
+### Changed
+
+- Framework development version is now `0.6.0-dev`.
+- Workflow-backed runs preserve the exact resolved plan and workflow digest,
+  cap concurrency to the declared bound, and enforce per-stage adapter
+  timeouts while retaining existing case resume behavior.
+
 ## 0.5.0 - 2026-07-30
 
 ### Added

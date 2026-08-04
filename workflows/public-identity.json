@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "id": "public-identity",
+  "name": "Public identity discovery",
+  "description": "Conservative collection from operator-supplied public identity and domain seeds.",
+  "max_concurrency": 2,
+  "stages": [
+    {
+      "id": "direct-identifiers",
+      "purpose": "Test supplied account identifiers with purpose-built passive collectors.",
+      "expected_information_gain": "Public account presence and account-linked observations.",
+      "plugins": ["ghunt", "maigret", "sherlock"],
+      "depends_on": [],
+      "timeout_seconds": 900
+    },
+    {
+      "id": "public-domains",
+      "purpose": "Collect restrained passive domain evidence from supplied domain seeds.",
+      "expected_information_gain": "Public email, host, domain, and IP candidate observations.",
+      "plugins": ["theharvester"],
+      "depends_on": [],
+      "timeout_seconds": 900
+    }
+  ]
+}
