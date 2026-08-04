@@ -69,7 +69,7 @@ timeouts, records the complete resolved plan in `run.json`, and uses the
 existing stable job identifiers for retry and resume behavior. Workflows are
 not shell runners: plugin commands still come only from validated manifest
 adapter arrays. Newly extracted candidates are never scheduled recursively in
-v0.6.
+v0.7.
 
 Inspect progress and create a local summary:
 
@@ -88,6 +88,40 @@ The default `report.md` can be regenerated in place. `--format` accepts
 for one format, must remain inside the case directory, and will not replace an
 existing file unless `--force` is supplied. Reserved metadata, review, and
 raw-run paths cannot be used as report destinations.
+
+## Integrity and portability
+
+Create a snapshot manifest and verify it later:
+
+```bash
+osint case integrity create example-case
+osint case integrity verify example-case
+osint case integrity verify example-case --json
+```
+
+The manifest hashes every regular material case artifact with SHA-256 and
+records its relative path and size. Verification fails for missing, modified,
+or unexpected content. Because a manifest is a snapshot, later authorized case
+activity requires creating a new manifest.
+
+Create and independently inspect deterministic owner-only bundles:
+
+```bash
+osint case export example-case --mode full -o ./example-case.osint-case
+osint case export example-case --mode redacted -o ./example-share.osint-case
+osint case inspect ./example-case.osint-case
+osint case import ./example-case.osint-case
+```
+
+Full bundles preserve all regular case artifacts and an independent integrity
+manifest. Import is fail-closed, refuses overwrites and case-ID renaming, and
+extracts only after validating every member name, type, size, and digest.
+The bundle also materializes a versioned entity snapshot whose available
+source artifacts are bound by relative path and SHA-256 digest.
+Redacted bundles contain derived summaries only; raw evidence, targets,
+commands, paths, authorization details, and analyst notes are excluded. They
+cannot be imported as live cases. Human review remains required before sharing.
+See [Evidence Integrity and Portability](EVIDENCE-INTEGRITY.md).
 
 ## Resume behavior
 
@@ -187,13 +221,17 @@ intelligence graph, and the confidence- and currentness-filtered final profile
 remain distinct layers. These capabilities will arrive through the versioned
 stages in the [Roadmap to v1.0](ROADMAP.md) and must satisfy the
 [v1.0 Product Contract](V1-PRODUCT-CONTRACT.md); the projection remains
-read-only in v0.6; workflows operate only on operator-supplied case targets.
+read-only in v0.7; workflows operate only on operator-supplied case targets.
 
 ## Privacy and integrity
 
 Case directories are mode `0700`; case-owned files are mode `0600`. Case IDs
 cannot contain path separators, case directories cannot be symbolic links,
 and generated reports cannot escape their case directory.
+
+Integrity manifests and bundles provide tamper evidence and reproducible
+transport. They do not certify who collected an artifact, establish legal
+chain of custody, prove source truth, or replace lawful forensic procedure.
 
 The report command normalizes supported tool output into a common, versioned
 finding contract. It preserves every outcome—including failures and dry-run
