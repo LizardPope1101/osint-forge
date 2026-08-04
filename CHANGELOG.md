@@ -37,6 +37,11 @@ stable release, minor versions may include breaking changes.
 - Evidence integrity is explicitly tamper-evident rather than a claim of
   authenticity, forensic certification, or legal chain of custody.
 
+### Fixed
+
+- Report corrupted case bundles as controlled CLI errors instead of exposing
+  an uncaught archive-validation traceback.
+
 ## 0.5.0 - 2026-07-30
 
 ### Added

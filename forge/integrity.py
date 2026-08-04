@@ -109,16 +109,19 @@ def inspect_bundle(bundle: Path) -> tuple[dict[str, Any], dict[str, bytes]]:
         archive = zipfile.ZipFile(bundle)
     except (OSError, zipfile.BadZipFile) as exc:
         raise IntegrityError(f"invalid bundle: {exc}") from exc
-    with archive:
-        members: dict[str, bytes] = {}
-        for info in archive.infolist():
-            name = safe_member(info.filename)
-            if name in members:
-                raise IntegrityError(f"duplicate bundle member: {name}")
-            mode = info.external_attr >> 16
-            if info.is_dir() or stat.S_ISLNK(mode) or (mode and not stat.S_ISREG(mode)):
-                raise IntegrityError(f"unsafe bundle member type: {name}")
-            members[name] = archive.read(info)
+    try:
+        with archive:
+            members: dict[str, bytes] = {}
+            for info in archive.infolist():
+                name = safe_member(info.filename)
+                if name in members:
+                    raise IntegrityError(f"duplicate bundle member: {name}")
+                mode = info.external_attr >> 16
+                if info.is_dir() or stat.S_ISLNK(mode) or (mode and not stat.S_ISREG(mode)):
+                    raise IntegrityError(f"unsafe bundle member type: {name}")
+                members[name] = archive.read(info)
+    except zipfile.BadZipFile as exc:
+        raise IntegrityError(f"invalid bundle: {exc}") from exc
     try:
         manifest = json.loads(members.pop(BUNDLE_MANIFEST).decode("utf-8"))
     except (KeyError, UnicodeError, json.JSONDecodeError) as exc:

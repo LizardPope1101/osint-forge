@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import argparse
+import contextlib
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -110,8 +112,15 @@ class IntegrityTests(unittest.TestCase):
             data = bytearray(bundle.read_bytes())
             data[-10] ^= 1
             bundle.write_bytes(data)
-            with self.assertRaises((integrity.IntegrityError, zipfile.BadZipFile)):
+            with self.assertRaises(integrity.IntegrityError):
                 integrity.inspect_bundle(bundle)
+
+            stderr = io.StringIO()
+            with mock.patch("sys.argv", ["osint", "case", "inspect", str(bundle)]), \
+                 contextlib.redirect_stderr(stderr):
+                self.assertEqual(osint_forge.main(), 2)
+            self.assertIn("ERROR: invalid bundle:", stderr.getvalue())
+            self.assertNotIn("Traceback", stderr.getvalue())
 
     def test_case_manifest_refuses_symlinks(self):
         with tempfile.TemporaryDirectory() as temp:
