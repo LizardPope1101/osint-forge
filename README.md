@@ -163,6 +163,21 @@ v0.5 never follows them automatically or treats them as identity conclusions.
 See the [Plugin API](docs/PLUGIN-API.md) and
 [v0.5 candidate decisions](docs/PLUGIN-EVALUATION.md).
 
+The v0.6 development line adds deterministic, entity-aware workflow planning.
+Preview the built-in conservative profile without network activity, then run
+the exact resolved selection when authorized:
+
+```bash
+osint case plan example-case --workflow public-identity
+osint case run example-case --workflow public-identity
+```
+
+Plans preserve separate seed identities, explain every plugin/entity decision,
+surface coverage gaps, record information-gain rationale, and enforce declared
+concurrency and timeout bounds. They do not infer identity, execute arbitrary
+shell text, or recursively pursue extracted candidates. See
+[`docs/CASE-MANAGEMENT.md`](docs/CASE-MANAGEMENT.md).
+
 ## Modular plugin system
 
 Every tool is a self-contained plugin:

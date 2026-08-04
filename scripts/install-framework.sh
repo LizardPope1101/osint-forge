@@ -35,7 +35,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cp -a "$ROOT/forge" "$ROOT/plugins" "$ROOT/scripts" "$staging/"
+cp -a "$ROOT/forge" "$ROOT/plugins" "$ROOT/scripts" "$ROOT/workflows" "$staging/"
 find "$staging" -type d -name __pycache__ -prune -exec rm -rf -- {} +
 find "$staging" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 find "$staging" -type d -exec chmod 0755 {} +
