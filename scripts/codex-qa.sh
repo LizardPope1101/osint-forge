@@ -198,7 +198,11 @@ fi
 
 commit="$(git rev-parse HEAD)"
 branch="$(git branch --show-current)"
-version="$(./bin/osint --version)"
+source_version="$(OSINT_FORGE_ROOT="$ROOT" ./bin/osint --version)"
+installed_version="not installed"
+if command -v osint >/dev/null 2>&1; then
+    installed_version="$(osint --version)"
+fi
 
 if [[ "$MODE" == "release" ]]; then
     [[ "$branch" == "main" ]] || die "Release QA must start from branch main; found: $branch"
@@ -232,7 +236,8 @@ Debian testing VM.
 Repository: ${ROOT}
 Starting branch: ${branch}
 Starting commit: ${commit}
-Reported version: ${version}
+Source version: ${source_version}
+Installed version: ${installed_version}
 Evidence directory: ${run_dir}
 
 Read and obey AI_POLICY.md, docs/QA-HARNESS.md, docs/RELEASING.md,
@@ -276,7 +281,8 @@ cat >"${run_dir}/metadata.txt" <<EOF
 Mode:           ${MODE}
 Branch:         ${branch}
 Commit:         ${commit}
-Version:        ${version}
+Source version: ${source_version}
+Installed:      ${installed_version}
 Started (UTC):  $(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 

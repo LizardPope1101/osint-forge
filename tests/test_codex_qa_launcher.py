@@ -69,6 +69,7 @@ class CodexQaLauncherTests(unittest.TestCase):
         )
         self._write("gh", "#!/usr/bin/env bash\nexit 0\n")
         self._write("sudo", "#!/usr/bin/env bash\nexit 0\n")
+        self._write("osint", "#!/usr/bin/env bash\necho 'OSINT Forge 0.5.0'\n")
 
     def _environment(self, **updates):
         environment = os.environ.copy()
@@ -134,6 +135,8 @@ class CodexQaLauncherTests(unittest.TestCase):
         self.assertIn("--json", runner)
         self.assertIn("Testing and corrective patching are authorized", prompt)
         self.assertIn("publication is not part", prompt)
+        self.assertIn("Source version: OSINT Forge 0.7.0", prompt)
+        self.assertIn("Installed version: OSINT Forge 0.5.0", prompt)
         self.assertTrue((self.base / "tmux.log").is_file())
 
     def test_release_launch_is_exact_main_and_uses_dedicated_vm_boundary(self):
