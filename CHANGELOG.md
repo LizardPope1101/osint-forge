@@ -5,7 +5,7 @@ All notable changes to OSINT Forge will be documented here.
 The project follows [Semantic Versioning](https://semver.org/). Until the first
 stable release, minor versions may include breaking changes.
 
-## Unreleased
+## 0.7.0 - 2026-08-04
 
 ### Added
 
@@ -30,7 +30,7 @@ stable release, minor versions may include breaking changes.
 
 ### Changed
 
-- Framework development version is now `0.7.0-dev`.
+- Framework version is now `0.7.0`.
 - Workflow-backed runs preserve the exact resolved plan and workflow digest,
   cap concurrency to the declared bound, and enforce per-stage adapter
   timeouts while retaining existing case resume behavior.
