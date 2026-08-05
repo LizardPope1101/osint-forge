@@ -135,7 +135,7 @@ class CodexQaLauncherTests(unittest.TestCase):
         self.assertIn("--json", runner)
         self.assertIn("Testing and corrective patching are authorized", prompt)
         self.assertIn("publication is not part", prompt)
-        self.assertIn("Source version: OSINT Forge 0.8.0", prompt)
+        self.assertIn("Source version: OSINT Forge 0.8.1", prompt)
         self.assertIn("Installed version: OSINT Forge 0.5.0", prompt)
         self.assertTrue((self.base / "tmux.log").is_file())
 
