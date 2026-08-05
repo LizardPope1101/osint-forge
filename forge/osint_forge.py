@@ -32,7 +32,7 @@ except ImportError:
     import reporting
     import workflows
 
-__version__ = "0.8.0"
+__version__ = "0.8.1"
 
 SYSTEM_ROOT = Path("/usr/local/share/osint-forge")
 STATE_ROOT = Path.home() / ".local/state/osint-forge"
