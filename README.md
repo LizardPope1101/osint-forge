@@ -5,10 +5,11 @@
 
 OSINT Forge is a modular OSINT tool manager and evidence-preserving
 investigation workflow for a minimal Debian-based workstation. Its v1.0
-direction is an authorized, bounded intelligence workflow that can start with
-multiple known entities, coordinate compatible tools, correlate new leads, and
-produce transparent confidence-filtered reporting without discarding raw
-evidence.
+direction is a search-first, bounded intelligence engine: create a case, add
+seeds, and run it. Search providers discover candidates; existing OSINT plugins
+verify and enrich them when compatible tools exist; Forge correlates evidence,
+pursues viable authorized leads, and reports confidence and verification status
+separately without discarding raw evidence.
 
 Use it only for lawful research. Network scanning must be limited to systems
 you own or are explicitly authorized to assess.
@@ -30,7 +31,7 @@ exact-commit, tamper-evident validation is provided by the
 Clone the latest stable tag:
 
 ```bash
-git clone --branch v0.5.0 https://github.com/LizardPope1101/osint-forge.git
+git clone --branch v0.7.0 https://github.com/LizardPope1101/osint-forge.git
 cd osint-forge
 chmod +x bootstrap.sh
 ./bootstrap.sh
@@ -178,7 +179,7 @@ concurrency and timeout bounds. They do not infer identity, execute arbitrary
 shell text, or recursively pursue extracted candidates. See
 [`docs/CASE-MANAGEMENT.md`](docs/CASE-MANAGEMENT.md).
 
-The v0.7 development line makes case artifacts tamper-evident and portable:
+Version 0.7 makes case artifacts tamper-evident and portable:
 
 ```bash
 osint case integrity create example-case
@@ -226,9 +227,12 @@ Copy `docs/plugin-template` to start a new plugin. See
 ## Roadmap
 
 The complete recursive intelligence workflow is a committed v1.0 goal, not a
-post-v1.0 possibility. Development proceeds additively so current case,
-plugin, evidence, and CLI behavior remains testable while the new entity,
-correlation, and discovery layers mature.
+post-v1.0 possibility. The canonical direction is search-first: provider search
+discovers leads, the existing plugin catalog verifies or enriches them when
+possible, correlation scores independent evidence, and bounded recursion
+selects the next useful action. Development proceeds additively so current case,
+plugin, evidence, and CLI behavior remains testable while the new layers
+mature.
 
 See the canonical repository [Roadmap to v1.0](docs/ROADMAP.md) and the
 [v1.0 Product Contract](docs/V1-PRODUCT-CONTRACT.md), which defines the
