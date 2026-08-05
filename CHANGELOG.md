@@ -5,7 +5,7 @@ All notable changes to OSINT Forge will be documented here.
 The project follows [Semantic Versioning](https://semver.org/). Until the first
 stable release, minor versions may include breaking changes.
 
-## 0.8.0 - 2026-08-04
+## 0.8.0 - 2026-08-05
 
 ### Added
 
