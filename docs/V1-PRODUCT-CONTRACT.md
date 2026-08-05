@@ -1,11 +1,12 @@
 # v1.0 Product Contract
 
-OSINT Forge v1.0 is an evidence-preserving, multi-seed public-source identity
-discovery and profile-synthesis system. Its defining workflow begins with a
-small set of reliable identifiers, discovers additional public identifiers,
-tests whether the observations describe the same subject, follows worthwhile
-leads within explicit limits, and produces a current, confidence-filtered
-profile.
+OSINT Forge v1.0 is a search-first, evidence-preserving, multi-seed
+public-source identity discovery and profile-synthesis system. Its canonical
+operator workflow is deliberately small: create a case, add one or more seeds,
+and run the case. Search providers perform primary discovery; existing OSINT
+plugins verify or enrich candidates when compatible tools exist. Forge tests
+whether observations describe the same subject, follows worthwhile leads
+within explicit limits, and produces a current, confidence-filtered profile.
 
 This contract defines the committed v1.0 outcome. It does not claim that every
 person has a discoverable public record or that any investigation can be
@@ -19,16 +20,20 @@ email address—Forge must be able to:
 1. preserve the supplied values and their stated certainty;
 2. normalize and canonicalize the seeds without treating them as proof of one
    identity;
-3. select compatible installed plugins and explain every selection;
-4. preserve raw output and execution provenance;
+3. plan and execute compatible provider searches and explain every selection;
+4. preserve returned source evidence, raw tool output, and execution
+   provenance;
 5. extract candidate accounts, usernames, emails, phone numbers, locations,
    domains, websites, infrastructure, and other supported public identifiers;
 6. evaluate whether each observation relates to the subject;
-7. pursue eligible candidates through a bounded, auditable discovery queue;
-8. distinguish current, historical, conflicting, unresolved, and rejected
-   information;
-9. retain the complete evidence graph internally; and
-10. generate a final profile containing only conclusions that meet an explicit
+7. invoke compatible verification plugins when available and bypass that step
+   when no applicable tool exists;
+8. score the available evidence independently from verification status;
+9. pursue eligible candidates through a bounded, auditable discovery queue;
+10. distinguish current, historical, conflicting, unresolved, rejected, and
+    tool-unverified information;
+11. retain the complete evidence graph internally; and
+12. generate a final profile containing only conclusions that meet an explicit
     confidence and currentness policy.
 
 The operator must be able to inspect why an item was included, excluded,
@@ -81,8 +86,20 @@ At minimum it must distinguish:
 
 Each assessment must expose its evidence, method, timestamp, source
 independence assumptions, contradictions, and contribution to the result.
-Multiple tools repeating one underlying data source count as dependent
-corroboration.
+Multiple tools or search results repeating one underlying data source count as
+dependent corroboration. A missing compatible verification tool does not erase
+a supported finding or count against it as a failed verification; it limits the
+available evidence and must be disclosed.
+
+## Verification status
+
+Verification status is separate from confidence. Every finding must use an
+explicit state such as `verified`, `contradicted`, `inconclusive`,
+`tool_unavailable`, `tool_failed`, `not_applicable`, or
+`not_attempted`. When no compatible verification tool exists, Forge may
+continue scoring independent search evidence and pursuing viable leads, but
+the report must plainly identify the finding as tool-unverified. Tool failure
+is neither confirmation nor contradiction.
 
 ## Temporal status
 
@@ -194,9 +211,9 @@ transparent uncertainty, and the ability to stop.
 | v0.5 | Accepted/emitted entity contracts and deterministic candidate observations |
 | v0.6 | Multi-seed planning, information-gain rationale, and reproducible entity-aware workflows |
 | v0.7 | Verifiable evidence and portable intelligence graphs |
-| v0.8 | Relationships, source-aware correlation, temporal status, contradictions, and scoped confidence |
-| v0.9 | Bounded recursive discovery, stopping conditions, hardening, benchmarks, and contract freeze |
-| v1.0 | Stable three-seed-to-profile workflow with confidence- and currentness-filtered reporting |
+| v0.8 | Search-provider discovery, normalized results, relationships, source-aware correlation, verification status, temporal status, contradictions, and scoped confidence |
+| v0.9 | Bounded recursive discovery, dynamic next-action selection, stopping conditions, hardening, benchmarks, and contract freeze |
+| v1.0 | Stable create-case → add-seeds → run-case workflow with search-first discovery, opportunistic verification, bounded recursion, and confidence/currentness-filtered reporting |
 
 The [Roadmap to v1.0](ROADMAP.md) and release issues allocate delivery, but
 this document is the canonical product outcome.
