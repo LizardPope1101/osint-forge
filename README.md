@@ -262,7 +262,10 @@ See the canonical repository [Roadmap to v1.0](docs/ROADMAP.md) and the
 three-seed-to-profile workflow, temporal status, confidence boundaries,
 recursive stopping conditions, and measurable accuracy requirements. The
 [architecture tracking issue](https://github.com/LizardPope1101/osint-forge/issues/44)
-coordinates implementation.
+coordinates implementation. Community launch and ecosystem work after v1.0 are
+tracked separately in the
+[Post-v1.0 Community Adoption and Ecosystem Growth plan](docs/COMMUNITY-ADOPTION.md).
+
 Release work is tracked in:
 
 - [v0.4: normalized reporting and seed entities](https://github.com/LizardPope1101/osint-forge/issues/6)
