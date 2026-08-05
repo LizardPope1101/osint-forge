@@ -213,8 +213,13 @@ minimization, distribution, and final analytical judgment.
 
 ## Beyond v1.0
 
-Post-v1.0 work is tentative. It may improve performance, usability,
-visualization, collaboration, interoperability, deployment, and supported
-entity or plugin coverage. Those goals are not promises and cannot displace
-v1.0 stability, compatibility, security, provenance, or maintenance
+Post-v1.0 engineering work is tentative. It may improve performance,
+usability, visualization, collaboration, interoperability, deployment, and
+supported entity or plugin coverage. Those goals are not promises and cannot
+displace v1.0 stability, compatibility, security, provenance, or maintenance
 obligations.
+
+Community launch, outreach, and ecosystem work are governed separately by the
+[Post-v1.0 Community Adoption and Ecosystem Growth plan](COMMUNITY-ADOPTION.md).
+That plan begins only after its launch-readiness gate is satisfied. Its adoption
+metrics are directional targets, not product commitments or release guarantees.
