@@ -5,6 +5,24 @@ All notable changes to OSINT Forge will be documented here.
 The project follows [Semantic Versioning](https://semver.org/). Until the first
 stable release, minor versions may include breaking changes.
 
+## 0.8.1 - 2026-08-05
+
+### Changed
+
+- Framework version is now `0.8.1`.
+
+### Fixed
+
+- Serialize concurrent target additions to the same case with a per-case
+  advisory lock so overlapping read-modify-write operations preserve every
+  unique update instead of silently overwriting one another.
+
+### Tests
+
+- Add deterministic concurrent-edit regression coverage using 16 simultaneous
+  unique case additions, validated across Python 3.10 through 3.13 and clean
+  Debian and Ubuntu installations.
+
 ## 0.8.0 - 2026-08-05
 
 ### Added
