@@ -68,8 +68,27 @@ caps requested parallelism to the workflow maximum, enforces declared adapter
 timeouts, records the complete resolved plan in `run.json`, and uses the
 existing stable job identifiers for retry and resume behavior. Workflows are
 not shell runners: plugin commands still come only from validated manifest
-adapter arrays. Newly extracted candidates are never scheduled recursively in
-v0.7.
+adapter arrays. Newly extracted candidates are never scheduled recursively.
+
+Execute a reviewed provider adapter or import externally obtained provider
+results, then inspect the deterministic intelligence graph:
+
+```bash
+osint case search example-case ./provider-adapter.json
+osint case observe example-case example-search ./provider-results.json
+osint case intelligence example-case
+osint case intelligence example-case --json
+```
+
+`search` executes a reviewed, versioned argv adapter only for compatible case
+seeds and preserves its status and logs. `observe` strictly validates
+versioned JSON and preserves it inside the case without executing the named
+provider. `intelligence` derives
+observations, canonical entities, evidence-backed relationships,
+contradictions, verification status, temporal status, and scoped confidence
+from available evidence. Provider search is the primary discovery layer;
+plugins remain conditional verification and enrichment sensors. See
+[Correlation and Confidence](CORRELATION.md).
 
 Inspect progress and create a local summary:
 
@@ -200,16 +219,18 @@ normalized for names and addresses.
 Seed confidence describes input fidelity only: the operator deliberately
 supplied the value. It does not assert that the seed belongs to a particular
 person, that an address is current, or that any relationship has been proven.
-Extracted candidates remain unverified observations with source target,
+Extracted plugin candidates remain unverified observations with source target,
 plugin, run, and raw-file provenance. Canonically equivalent candidates and
-seeds merge without dropping any source. The relationship collection remains
-empty.
+seeds merge without dropping any source. The compatibility entity projection's
+relationship collection remains empty. The separate provider intelligence
+graph can add relationships and confidence assessments only when their
+evidence and rationale remain inspectable. Mirrors and syndicated copies
+retain their history but do not count as independent corroboration.
 
 This projection is derived rather than independently persisted. Seed state
-comes from `case.json`; candidates are rebuilt from preserved output through
-the same deterministic normalizers used for reports. It does not perform
-recursive discovery, relationship inference, or automated identity
-attribution.
+comes from `case.json`; plugin candidates are rebuilt from preserved output.
+Provider observations are rebuilt in the separate intelligence graph. Neither
+view performs recursive discovery or opaque automated identity attribution.
 See [Entity Model](ENTITY-MODEL.md) for the complete contract and its
 confidence boundary.
 
@@ -220,8 +241,9 @@ the rationale for each pursued lead. Preserved evidence, the internal
 intelligence graph, and the confidence- and currentness-filtered final profile
 remain distinct layers. These capabilities will arrive through the versioned
 stages in the [Roadmap to v1.0](ROADMAP.md) and must satisfy the
-[v1.0 Product Contract](V1-PRODUCT-CONTRACT.md); the projection remains
-read-only in v0.7; workflows operate only on operator-supplied case targets.
+[v1.0 Product Contract](V1-PRODUCT-CONTRACT.md). Version 0.8 keeps the
+projection read-only and workflows continue to operate only on
+operator-supplied case targets; discovered entities are not queued.
 
 ## Privacy and integrity
 

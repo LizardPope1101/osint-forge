@@ -155,6 +155,14 @@ Tracking: [issue #15](https://github.com/LizardPope1101/osint-forge/issues/15)
 - Keep every automated inference transparent, reversible, and separate from
   analyst-confirmed intelligence.
 
+Implementation status: implemented for the v0.8.0 candidate as strict,
+explicit provider-adapter execution, offline provider-result ingestion, and
+deterministic intelligence projection. Forge
+preserves imported source evidence, correlates source-aware observations and
+relationships, exposes contradictions and scoped confidence, and records
+verification and temporal status. It does not begin
+the bounded recursive discovery allocated to v0.9.
+
 ### v0.9 — Controlled recursive discovery and contract freeze
 
 Tracking: [issue #17](https://github.com/LizardPope1101/osint-forge/issues/17)

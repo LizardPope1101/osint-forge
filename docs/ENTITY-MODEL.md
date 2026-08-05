@@ -2,11 +2,12 @@
 
 OSINT Forge is evolving from tool orchestration toward evidence-preserving
 entity discovery and correlation. Version 0.4 established deterministic seed
-entities. Version 0.5 adds provenance-linked candidate observations extracted
-by explicitly authorized plugin normalizers.
+entities, version 0.5 added provenance-linked plugin candidates, and version
+0.8 adds search-provider observations and evidence-backed relationships.
 
-This foundation does not perform recursive discovery, automated identity
-attribution, or relationship inference.
+This layer does not perform recursive discovery or opaque identity
+attribution. See [Correlation and Confidence](CORRELATION.md) for the v0.8
+evidence, inference, and confidence boundaries.
 
 ## Contract
 
@@ -22,7 +23,8 @@ The command returns an object with:
 - `case_id`: owning case;
 - `entity_count`: number of projected entities;
 - `entities`: canonical seed and extracted-candidate entity records; and
-- `relationships`: currently empty, reserved for later evidence-backed links.
+- `relationships`: empty in this compatibility projection; evidence-backed
+  provider links are exposed by the separate `case intelligence` graph.
 
 Each seed entity contains:
 
@@ -42,6 +44,15 @@ An extracted entity has `extracted` origin, an unscored
 that identify the candidate record, originating target, plugin, and preserved
 source file. Canonically identical seed and extracted values become one entity
 with all sources retained. This is deduplication, not identity attribution.
+The separate provider graph retains its own preserved source identity;
+repeated copies of one underlying source remain dependent.
+
+The separate `osint case intelligence CASE` graph exposes provider-discovered
+entities and relationships. Relationships identify their source and target
+entities, type, supporting and contradicting observation IDs, automated method
+and rationale, verification status, temporal status, and scoped confidence.
+Analyst-confirmed intelligence remains separate. Keeping this view separate
+preserves the existing `case entities` contract while v1 interfaces evolve.
 
 ## Seed types
 
@@ -85,7 +96,7 @@ input. It does not mean:
 - two seeds identify the same person; or
 - any relationship has been independently corroborated.
 
-Later confidence models must state their scope, method, evidence, and
+Confidence models state their scope, method, evidence, and
 independence assumptions instead of collapsing every judgment into one opaque
 number.
 
@@ -105,8 +116,9 @@ The entity model is one layer of the committed
 2. v0.6 adds entity-aware planning and explainable plugin selection.
 3. v0.7 binds entity and relationship provenance into integrity and export
    contracts.
-4. v0.8 adds evidence-backed relationships, source-aware correlation, temporal
-   status, and separate observation, relationship, identity, and currentness
+4. v0.8 adds explicit provider discovery and offline provider observations,
+   source-aware correlation, contradictions, temporal and verification status,
+   and separate observation, relationship, identity, and currentness
    confidence.
 5. v0.9 adds bounded discovery queues with cycle, resource, approval, and
    authorization-scope controls.

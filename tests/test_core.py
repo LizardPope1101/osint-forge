@@ -687,7 +687,7 @@ class ExecutionTests(unittest.TestCase):
 
 class CliTests(unittest.TestCase):
     def test_version_command(self):
-        self.assertEqual(osint_forge.__version__, "0.7.0")
+        self.assertEqual(osint_forge.__version__, "0.8.0")
 
     def test_validate_command_succeeds(self):
         rc = osint_forge.cmd_validate(argparse.Namespace(json=False))
@@ -1195,6 +1195,7 @@ class CaseManagementTests(unittest.TestCase):
             self.add_target(root)
             with mock.patch.dict(os.environ, {"OSINT_FORGE_CASES": str(root)}), \
                  mock.patch.object(osint_forge, "is_installed", return_value=True), \
+                 mock.patch.object(osint_forge, "run_adapter", return_value=0), \
                  mock.patch(
                      "concurrent.futures.as_completed",
                      side_effect=KeyboardInterrupt,

@@ -166,7 +166,7 @@ def build_plan(root: Path, profile: str) -> list[dict[str, Any]]:
     plan = [
         command_step(
             "python-compile",
-            ["python3", "-m", "py_compile", "forge/osint_forge.py", "forge/entities.py", "forge/reporting.py"],
+            ["python3", "-m", "py_compile", "forge/osint_forge.py", "forge/entities.py", "forge/reporting.py", "forge/correlation.py", "forge/providers.py"],
             required="python3",
         ),
         command_step(

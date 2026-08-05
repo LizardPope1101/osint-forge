@@ -5,6 +5,41 @@ All notable changes to OSINT Forge will be documented here.
 The project follows [Semantic Versioning](https://semver.org/). Until the first
 stable release, minor versions may include breaking changes.
 
+## 0.8.0 - 2026-08-04
+
+### Added
+
+- Versioned, strict JSON contracts for offline search-provider result
+  ingestion with preserved referenced evidence, source identity, and case-local
+  provenance.
+- `osint case observe CASE PROVIDER INPUT` for importing provider evidence
+  without fetching from or executing the provider.
+- `osint case search CASE ADAPTER` for bounded argv-based provider execution
+  against compatible operator-supplied seeds with preserved status and logs.
+- `osint case intelligence CASE` for a deterministic intelligence graph of
+  observations, entities, evidence-backed relationships, contradictions,
+  verification states, temporal states, and scoped confidence.
+- Source-aware correlation that retains every source while treating mirrors
+  and syndicated results as dependent corroboration.
+- Separate observation, relationship, identity, and currentness assessments;
+  explicit verification and temporal-status enums; and transparent,
+  reversible automated inference.
+
+### Changed
+
+- Framework version is now `0.8.0`.
+- Provider evidence is the primary discovery layer; existing plugins remain
+  conditional verification and enrichment sensors.
+- Intelligence and report views expose correlation and tool-unavailable limitations
+  without treating tool failure or absence as contradictory evidence.
+
+### Security
+
+- Provider input is fail-closed for unsupported schemas, malformed or
+  inconsistent records, symbolic links, unsafe files, and unrecognized data.
+- Imported evidence and derived intelligence artifacts retain owner-only case
+  permissions and conservative shareable redaction.
+
 ## 0.7.0 - 2026-08-04
 
 ### Added

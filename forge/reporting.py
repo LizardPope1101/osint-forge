@@ -17,7 +17,7 @@ import subprocess
 import sys
 from typing import Any
 
-REPORT_SCHEMA = 2
+REPORT_SCHEMA = 3
 NORMALIZER_SCHEMAS = {1, 2}
 REVIEW_SCHEMA = 1
 CONFIDENCE_LEVELS = {"unverified", "low", "medium", "high"}
@@ -354,6 +354,8 @@ def build_report(
     metadata: dict[str, Any],
     catalog: dict[str, tuple[Path, dict[str, Any]]],
     framework_version: str,
+    *,
+    intelligence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     reviews_path = _case_child(
         case_path, "findings/reviews.json", "analyst-review path"
@@ -454,8 +456,14 @@ def build_report(
     target_ids = {target["id"] for target in metadata["targets"]}
     current_finding_ids = {finding["id"] for finding in findings}
     orphaned_reviews = sorted(set(reviews) - current_finding_ids)
-    return {
-        "schema": REPORT_SCHEMA,
+    has_intelligence = intelligence is not None
+    graph = copy.deepcopy(intelligence) if has_intelligence else {
+        "schema": 1, "case_id": metadata["id"], "entities": [],
+        "observations": [], "relationships": [], "contradictions": [],
+        "source_groups": [],
+    }
+    report = {
+        "schema": REPORT_SCHEMA if has_intelligence else 2,
         "report_type": "osint-forge.normalized-case-report",
         "framework_version": framework_version,
         "generated_at": metadata["updated_at"],
@@ -504,6 +512,14 @@ def build_report(
             ),
         },
     }
+    if has_intelligence:
+        report["summary"].update({
+            "provider_observation_count": len(graph["observations"]),
+            "relationship_count": len(graph["relationships"]),
+            "contradiction_count": len(graph["contradictions"]),
+        })
+        report["intelligence"] = graph
+    return report
 
 
 def redact_report(report: dict[str, Any]) -> dict[str, Any]:
@@ -585,6 +601,39 @@ def redact_report(report: dict[str, Any]) -> dict[str, Any]:
         for item in redacted["normalization_errors"]
     ]
     redacted["orphaned_review_ids"] = []
+    graph = redacted.get("intelligence")
+    def redacted_confidence(value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not value:
+            return value
+        return {
+            "scope": value.get("scope"),
+            "score": value.get("score"),
+            "method": value.get("method"),
+            "assessed_at": value.get("assessed_at"),
+            "independent_source_count": len(
+                value.get("independent_source_groups", [])
+            ),
+            "dependent_observation_count": value.get(
+                "dependent_observation_count", 0
+            ),
+            "contradiction_count": len(value.get("contradictions", [])),
+            "verification_status": value.get("verification_status"),
+        }
+    if graph is not None:
+        graph["case_id"] = "shared-case"
+        graph["entities"] = [
+        {
+            "id": f"entity-{index:03d}", "type": item["type"],
+            "value": "[redacted]", "canonical_value": "[redacted]",
+            "observation_count": len(item.get("observations", [])),
+            "confidence": redacted_confidence(item.get("confidence")),
+        }
+            for index, item in enumerate(graph.get("entities", []), 1)
+        ]
+        graph["observations"] = []
+        graph["relationships"] = []
+        graph["contradictions"] = []
+        graph["source_groups"] = []
     redacted["integrity"]["all_findings_traceable"] = False
     redacted["integrity"]["all_candidates_traceable"] = False
     return redacted
@@ -719,6 +768,44 @@ def render_markdown(
                 f"`{_markdown(candidate['target']['id'])}` | {raw} |"
             )
     lines.append("")
+    intelligence = report.get("intelligence")
+    if intelligence is not None:
+        lines[lines.index("## Targets"):lines.index("## Targets")] = [
+            f"- Provider observations: {summary['provider_observation_count']}",
+            f"- Evidence-backed relationships: {summary['relationship_count']}",
+            f"- Contradictions: {summary['contradiction_count']}",
+            "",
+        ]
+        lines.extend(["## Correlation and confidence", ""])
+    if intelligence is None:
+        intelligence = {"observations": [], "relationships": []}
+    elif not intelligence["relationships"]:
+        lines.append("No provider relationships were correlated.")
+    for relationship in intelligence["relationships"]:
+        confidence = relationship["confidence"]
+        lines.extend([
+            f"### `{_markdown(relationship['id'])}`",
+            "",
+            f"- **Relationship:** `{_markdown(relationship['source_entity_id'])}` "
+            f"{_markdown(relationship['type'])} `{_markdown(relationship['target_entity_id'])}`",
+            f"- **Inference:** {_markdown(relationship['inference_state'])}",
+            f"- **Verification:** {_markdown(relationship['verification_status'])}",
+            f"- **Temporal status:** {_markdown(relationship['temporal_status'])}",
+            f"- **Relationship confidence:** {_markdown(confidence['score'])} "
+            f"({_markdown(confidence['method'])})",
+            f"- **Independent sources:** {len(confidence['independent_source_groups'])}",
+            f"- **Contradictions:** {len(relationship['contradictions'])}",
+            "",
+        ])
+    if any(
+        item["verification_status"] in {"tool_unavailable", "tool_failed", "not_attempted"}
+        for item in intelligence["observations"] + intelligence["relationships"]
+    ):
+        lines.extend([
+            "> Some provider evidence is tool-unverified. Tool failure, unavailability, "
+            "or no attempt is neither confirmation nor contradiction; confidence uses "
+            "the remaining source evidence.", "",
+        ])
     if report["normalization_errors"]:
         lines.extend(["## Normalization errors", ""])
         for error in report["normalization_errors"]:
@@ -806,6 +893,27 @@ def render_html(
         f"({esc(item.get('plugin'))}): {esc(item.get('error'))}</li>"
         for item in report["normalization_errors"]
     )
+    intelligence = report.get("intelligence", {"observations": [], "relationships": []})
+    relationship_rows = "".join(
+        "<tr>"
+        f"<td><code>{esc(item['id'])}</code></td>"
+        f"<td>{esc(item['type'])}</td>"
+        f"<td>{esc(item['verification_status'])}</td>"
+        f"<td>{esc(item['temporal_status'])}</td>"
+        f"<td>{esc(item['confidence']['score'])}</td>"
+        f"<td>{len(item['confidence']['independent_source_groups'])}</td>"
+        f"<td>{len(item['contradictions'])}</td>"
+        "</tr>"
+        for item in intelligence["relationships"]
+    )
+    tool_unverified = any(
+        item["verification_status"] in {
+            "tool_unavailable", "tool_failed", "not_attempted"
+        }
+        for item in (
+            intelligence["observations"] + intelligence["relationships"]
+        )
+    )
     summary = report["summary"]
     return f"""<!doctype html>
 <html lang="en">
@@ -836,6 +944,9 @@ code {{ overflow-wrap: anywhere; }}
 <li>Findings: {summary['finding_count']}</li>
 <li>Candidate observations: {summary['candidate_count']}</li>
 <li>Normalization errors: {summary['normalization_error_count']}</li>
+{f"<li>Provider observations: {summary['provider_observation_count']}</li>" if 'intelligence' in report else ''}
+{f"<li>Evidence-backed relationships: {summary['relationship_count']}</li>" if 'intelligence' in report else ''}
+{f"<li>Contradictions: {summary['contradiction_count']}</li>" if 'intelligence' in report else ''}
 </ul>
 <h2>Execution outcomes</h2>
 <table>
@@ -856,6 +967,16 @@ code {{ overflow-wrap: anywhere; }}
 <th>Target</th><th>Raw source</th></tr></thead>
 <tbody>{''.join(candidate_rows)}</tbody>
 </table>
+{'<h2>Correlation and confidence</h2>' if 'intelligence' in report else ''}
+<table>
+<thead><tr><th>ID</th><th>Relationship</th><th>Verification</th>
+<th>Temporal status</th><th>Confidence</th><th>Independent sources</th>
+<th>Contradictions</th></tr></thead>
+<tbody>{relationship_rows}</tbody>
+</table>
+{('<p class="warning">Some provider evidence is tool-unverified. Tool failure, '
+  'unavailability, or no attempt is neither confirmation nor contradiction.</p>')
+ if tool_unverified else ''}
 {f'<h2>Normalization errors</h2><ul>{errors}</ul>' if errors else ''}
 <p class="warning">Normalized findings are unverified leads, not established facts.
 Validate every lead independently against preserved raw evidence.</p>
@@ -866,16 +987,24 @@ Validate every lead independently against preserved raw evidence.</p>
 
 def render_csv(report: dict[str, Any]) -> str:
     output = io.StringIO(newline="")
-    fields = [
+    legacy_fields = [
         "finding_id", "category", "kind", "title", "value", "confidence",
         "analyst_note", "target_id", "target_type", "target_value", "plugin",
-        "job_status", "exit_code", "source_file", "raw_output",
-        "attributes_json",
+        "job_status", "exit_code", "source_file", "raw_output", "attributes_json",
     ]
+    fields = [
+        "record_type", "finding_id", "relationship_id", "category", "kind",
+        "title", "value", "confidence",
+        "analyst_note", "target_id", "target_type", "target_value", "plugin",
+        "job_status", "exit_code", "source_file", "raw_output",
+        "attributes_json", "verification_status", "temporal_status",
+        "independent_source_count", "contradiction_count",
+    ] if "intelligence" in report else legacy_fields
     writer = csv.DictWriter(output, fieldnames=fields, lineterminator="\n")
     writer.writeheader()
     for finding in report["findings"]:
         writer.writerow({
+            **({"record_type": "finding"} if "intelligence" in report else {}),
             "finding_id": finding["id"],
             "category": finding["category"],
             "kind": finding["kind"],
@@ -897,5 +1026,18 @@ def render_csv(report: dict[str, Any]) -> str:
                 separators=(",", ":"),
                 ensure_ascii=False,
             ),
+        })
+    for relationship in report.get("intelligence", {}).get("relationships", []):
+        writer.writerow({
+            "record_type": "relationship",
+            "relationship_id": relationship["id"],
+            "kind": relationship["type"],
+            "confidence": relationship["confidence"]["score"],
+            "verification_status": relationship["verification_status"],
+            "temporal_status": relationship["temporal_status"],
+            "independent_source_count": len(
+                relationship["confidence"]["independent_source_groups"]
+            ),
+            "contradiction_count": len(relationship["contradictions"]),
         })
     return output.getvalue()
