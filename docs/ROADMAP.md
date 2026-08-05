@@ -1,10 +1,12 @@
 # Roadmap to v1.0
 
-OSINT Forge is evolving from a modular OSINT tool manager into an
-evidence-preserving intelligence system. By v1.0, an authorized operator will
-be able to provide multiple known seed entities—such as names, email
-addresses, usernames, phone numbers, addresses, domains, IP addresses, and
-files—and let Forge coordinate a bounded investigation.
+OSINT Forge is evolving from a modular OSINT tool manager into a search-first,
+evidence-preserving intelligence engine. By v1.0, an authorized operator will
+create a case, add one or more seed entities—such as names, email addresses,
+usernames, phone numbers, addresses, domains, IP addresses, and files—and run
+one bounded investigation. Search providers perform primary discovery;
+existing OSINT plugins verify and enrich candidates when a compatible tool
+exists.
 
 The defining v1.0 outcome is a three-seed-to-profile workflow: given a small
 set of reliable identifiers such as a name, phone number, and email address,
@@ -16,17 +18,19 @@ in the [v1.0 Product Contract](V1-PRODUCT-CONTRACT.md).
 The v1.0 workflow will:
 
 1. normalize the supplied seeds;
-2. select compatible installed plugins;
-3. preserve raw output and execution provenance;
+2. plan and execute provider queries for primary discovery;
+3. preserve returned source evidence and complete provenance;
 4. extract additional candidate entities and relationships;
 5. canonicalize and deduplicate them without losing sources;
 6. correlate independent evidence and record contradictions;
-7. assign scoped, transparent confidence assessments;
-8. queue worthwhile discoveries for controlled follow-up;
-9. repeat within explicit authorization and resource limits;
-10. assess temporal status independently from identity confidence; and
-11. produce a current profile that separates supported conclusions from
-    historical, conflicting, unresolved, and rejected information.
+7. run compatible verification plugins when available;
+8. record verification status separately from scoped confidence;
+9. queue worthwhile discoveries for controlled follow-up;
+10. repeat within explicit authorization and resource limits;
+11. assess temporal status independently from identity confidence; and
+12. produce a current profile that separates supported conclusions from
+    historical, conflicting, unresolved, rejected, and tool-unverified
+    information.
 
 The releases through v1.0 are project commitments. Their implementation details
 may evolve when testing exposes a safer or more reliable design, but the
@@ -37,8 +41,14 @@ capabilities below are the intended stable destination.
 - Raw evidence and complete provenance are never replaced by normalized data.
 - Observations, automated inferences, and analyst-confirmed intelligence remain
   distinguishable.
-- Multiple tools repeating one underlying source do not count as independent
-  corroboration.
+- Repeated search hits increase confidence only when their underlying sources
+  are sufficiently independent; mirrors and syndicated copies do not count as
+  separate corroboration.
+- Tool verification is opportunistic, not a mandatory gate. A finding remains
+  eligible when no compatible verifier exists, but its verification status and
+  evidentiary limitations must be explicit.
+- Confidence and verification status are separate: unavailable or failed tools
+  are never represented as confirmation or contradiction.
 - Canonicalization and deduplication retain every source and contradiction.
 - Confidence is scoped, explainable, and evidence-backed rather than an opaque
   universal score.
@@ -62,9 +72,9 @@ capabilities below are the intended stable destination.
 | v0.5 | Governed plugin expansion plus entity-aware plugin and extraction contracts |
 | v0.6 | Multi-seed planning, reproducible workflows, information-gain rationale, and explainable plugin selection |
 | v0.7 | Evidence hashing, verification, and portable entity-aware case exports |
-| v0.8 | Entity relationships, transparent correlation, source independence, temporal status, contradictions, and scoped confidence |
-| v0.9 | Opt-in bounded recursive discovery, stopping conditions, benchmarks, hardening, and the v1 contract freeze |
-| v1.0 | Stable three-seed-to-profile workflow through controlled follow-up and confidence/currentness-filtered reporting |
+| v0.8 | Search-provider discovery, normalized results, entity relationships, source-aware correlation, contradictions, verification status, temporal status, and scoped confidence |
+| v0.9 | Bounded recursive lead enumeration, dynamic next-action selection, stopping conditions, benchmarks, hardening, and the v1 contract freeze |
+| v1.0 | Stable create-case → add-seeds → run-case intelligence workflow through search, correlation, opportunistic verification, controlled recursion, and transparent reporting |
 
 ### v0.4 — Reporting and seed entities
 
@@ -120,23 +130,28 @@ Tracking: [issue #14](https://github.com/LizardPope1101/osint-forge/issues/14)
 - Produce safe full-fidelity and conservatively redacted bundles.
 - Detect traversal, unsafe links, corruption, and redaction failures.
 
-Implementation status: versioned SHA-256 manifests, deterministic full and
-redacted bundles, independent inspection, safe full-case import, conservative
-redaction, and traversal/link/special-file/corruption defenses are implemented
-on the v0.7 development line. Live Debian validation remains required before
-release.
+Implementation status: shipped in v0.7.0 after Debian 13.6 live validation,
+17/17 release-harness gates, all exact-commit hosted CI jobs, both CodeQL
+analyses, and evidence-manifest verification.
 
 ### v0.8 — Correlation and confidence
 
 Tracking: [issue #15](https://github.com/LizardPope1101/osint-forge/issues/15)
 
+- Define versioned search-provider contracts and normalize provider results
+  into preserved, provenance-linked observations.
+- Make provider search the primary discovery layer while retaining current
+  plugins as conditional verification and enrichment sensors.
 - Add evidence-backed relationships among people, accounts, identifiers,
   domains, infrastructure, locations, and artifacts.
-- Deduplicate observations without erasing their source history.
-- Distinguish observation confidence, relationship confidence, and identity
-  confidence.
-- Assess currentness separately from identity and relationship confidence.
-- Account for source independence, staleness, conflicts, and analyst review.
+- Deduplicate observations without erasing their source history or mistaking
+  syndicated and mirrored results for independent corroboration.
+- Distinguish observation, relationship, identity, and currentness confidence.
+- Record verification states including `verified`, `contradicted`,
+  `inconclusive`, `tool_unavailable`, `tool_failed`, `not_applicable`,
+  and `not_attempted`.
+- Bypass tool verification when no compatible verifier exists; score the
+  remaining evidence and label the limitation in every report.
 - Keep every automated inference transparent, reversible, and separate from
   analyst-confirmed intelligence.
 
@@ -144,8 +159,9 @@ Tracking: [issue #15](https://github.com/LizardPope1101/osint-forge/issues/15)
 
 Tracking: [issue #17](https://github.com/LizardPope1101/osint-forge/issues/17)
 
-- Add an opt-in queue for newly discovered entities.
-- Select the next compatible tools using explicit, testable rules.
+- Add a bounded queue for newly discovered entities and candidate queries.
+- Dynamically select the next highest-value provider query or verification
+  action using explicit, testable rules.
 - Enforce maximum depth, runtime, requests, concurrency, confidence, plugin,
   target, and authorization-scope limits.
 - Detect cycles and prevent duplicate or runaway work.
@@ -163,10 +179,12 @@ Tracking: [issue #17](https://github.com/LizardPope1101/osint-forge/issues/17)
 
 Tracking: [issue #16](https://github.com/LizardPope1101/osint-forge/issues/16)
 
+- Stabilize the canonical CLI: create a case, add seeds, then run the case.
 - Accept multiple heterogeneous seeds in one authorized case.
 - Demonstrate the canonical name/phone/email three-seed workflow using
   synthetic or consenting test subjects.
-- Orchestrate collection, extraction, correlation, and bounded follow-up.
+- Orchestrate provider search, extraction, correlation, opportunistic
+  verification, and bounded follow-up.
 - Preserve the evidence graph and rationale behind every pursued lead.
 - Produce a deterministic profile of current intelligence meeting explicit
   identity-confidence and currentness thresholds while retaining historical,
