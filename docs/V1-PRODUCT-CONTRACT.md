@@ -86,7 +86,7 @@ At minimum it must distinguish:
 
 Each assessment must expose its evidence, method, timestamp, source
 independence assumptions, contradictions, and contribution to the result.
-Multiple tools or search results repeating one underlying data source count as
+Multiple tools or search results repeating one underlying data source do not count as
 dependent corroboration. A missing compatible verification tool does not erase
 a supported finding or count against it as a failed verification; it limits the
 available evidence and must be disclosed.
