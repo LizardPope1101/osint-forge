@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import contextlib
 import datetime as dt
+import fcntl
 import hashlib
 import json
 import os
@@ -232,6 +234,24 @@ def case_path(case_id: str, *, must_exist: bool = True) -> Path:
     if must_exist and not path.is_dir():
         raise SystemExit(f"Unknown case: {case_id}")
     return path
+
+
+@contextlib.contextmanager
+def case_lock(path: Path):
+    """Serialize read-modify-write operations against one case."""
+    lock_path = path / ".case.lock"
+    descriptor = os.open(
+        lock_path,
+        os.O_RDWR | os.O_CREAT | NOFOLLOW,
+        0o600,
+    )
+    os.fchmod(descriptor, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
 
 
 def append_case_activity(path: Path, event: str, **details: Any) -> None:
@@ -1150,26 +1170,28 @@ def cmd_case_create(args: argparse.Namespace) -> int:
 
 
 def cmd_case_add(args: argparse.Namespace) -> int:
-    path, metadata = load_case(args.case)
-    value = normalize_case_target(args.type, args.target)
-    identifier = target_id(args.type, value)
-    if any(target.get("id") == identifier for target in metadata["targets"]):
-        print(f"SKIP     {args.type}: target already exists in {args.case}")
-        return 0
-    target = {
-        "id": identifier,
-        "type": args.type,
-        "value": value,
-        "added_at": now(),
-    }
-    metadata["targets"].append(target)
-    save_case(path, metadata)
-    append_case_activity(
-        path,
-        "target_added",
-        target_id=identifier,
-        target_type=args.type,
-    )
+    path = case_path(args.case)
+    with case_lock(path):
+        path, metadata = load_case(args.case)
+        value = normalize_case_target(args.type, args.target)
+        identifier = target_id(args.type, value)
+        if any(target.get("id") == identifier for target in metadata["targets"]):
+            print(f"SKIP     {args.type}: target already exists in {args.case}")
+            return 0
+        target = {
+            "id": identifier,
+            "type": args.type,
+            "value": value,
+            "added_at": now(),
+        }
+        metadata["targets"].append(target)
+        save_case(path, metadata)
+        append_case_activity(
+            path,
+            "target_added",
+            target_id=identifier,
+            target_type=args.type,
+        )
     print(f"Added {args.type} target to {args.case}: {value}")
     return 0
 
