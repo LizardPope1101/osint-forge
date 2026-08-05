@@ -32,10 +32,13 @@ Full-fidelity mode preserves all regular case artifacts plus the case integrity
 manifest. It retains raw evidence, metadata, findings, entity inputs,
 timestamps, reviews, workflow plans and decisions, and available framework,
 plugin, schema, and workflow versions already present in those records.
-It also materializes a versioned `intelligence/entities.json` snapshot. Entity
+It also materializes versioned `intelligence/entities.json` and
+`intelligence/graph.json` snapshots. Entity and provider-observation
 sources bind to the verified bundle path and SHA-256 digest whenever the source
-artifact is available. This creates the provenance seam for future versioned
-relationships without inferring any relationship in v0.7.
+artifact is available. In v0.8, full bundles also preserve imported provider
+payloads, execution records, logs, and referenced evidence as ordinary case
+artifacts. A generated normalized report contains the derived provider graph; that inference never
+replaces its source evidence or becomes source truth.
 
 Redacted mode is deliberately narrower. It contains only a redacted case
 summary, structure-only entity projection, and redacted normalized report.

@@ -31,7 +31,7 @@ exact-commit, tamper-evident validation is provided by the
 Clone the latest stable tag:
 
 ```bash
-git clone --branch v0.7.0 https://github.com/LizardPope1101/osint-forge.git
+git clone --branch v0.8.0 https://github.com/LizardPope1101/osint-forge.git
 cd osint-forge
 chmod +x bootstrap.sh
 ./bootstrap.sh
@@ -124,6 +124,9 @@ osint case add example-case phone "+1 (555) 555-0100"
 osint case add example-case address "1 Example Way, Example City, NY"
 osint case add example-case domain example.com
 osint case run example-case --plugins maigret sherlock theharvester
+osint case search example-case ./provider-adapter.json
+osint case observe example-case example-search ./provider-results.json
+osint case intelligence example-case
 osint case status example-case
 osint case entities example-case
 osint case report example-case
@@ -194,6 +197,26 @@ evidence and sensitive operator data and are inspection-only. Bundles are
 deterministic, SHA-256 verified, owner-only, and reject traversal, links,
 special files, duplicate members, and corruption. See
 [`docs/EVIDENCE-INTEGRITY.md`](docs/EVIDENCE-INTEGRITY.md).
+
+Version 0.8 adds explicit versioned search-provider execution, offline result
+ingestion, and a deterministic intelligence graph:
+
+```bash
+osint case search example-case ./provider-adapter.json
+osint case observe example-case example-search ./provider-results.json
+osint case intelligence example-case
+osint case intelligence example-case --json
+```
+
+Forge strictly validates and preserves provider-result JSON; it does not fetch
+results or contact the named provider. Provider observations are the primary
+discovery evidence, while installed plugins remain conditional verification
+and enrichment sensors. Correlation preserves sources and contradictions,
+distinguishes mirrored evidence from independent corroboration, and reports
+observation, relationship, identity, and currentness confidence separately
+from verification status. Version 0.8 does not recursively pursue discoveries
+or claim the final v1.0 profile. See
+[`docs/CORRELATION.md`](docs/CORRELATION.md).
 
 ## Modular plugin system
 

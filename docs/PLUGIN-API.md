@@ -1,5 +1,13 @@
 # Plugin API
 
+Plugins are conditional verification and enrichment sensors in the v0.8
+search-first architecture. Search-provider evidence is discovered or imported
+through the strict, versioned adapter and result contracts described in
+[Correlation and Confidence](CORRELATION.md). A provider name is not a plugin,
+and `osint case observe` does not install, execute, or contact one. The
+operator-selected `osint case search CASE ADAPTER` command executes an argv
+adapter without treating it as a plugin.
+
 ## Directory contract
 
 ```text
@@ -148,7 +156,9 @@ claims. `type` must appear in the plugin's `entities.emitted`; `value` must be
 non-empty text; and `source_file` follows the same confinement rules as
 findings. Core assigns deterministic candidate IDs and adds plugin, target,
 run, raw-output, and source-file provenance. Candidate entities are never
-executed recursively in v0.5.
+executed recursively. Version 0.8 may correlate them with preserved provider
+observations, but that does not schedule plugin work or convert tool output
+into analyst-confirmed intelligence.
 
 ## Lifecycle environment
 

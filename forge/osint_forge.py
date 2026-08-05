@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import re
+import resource
 import shlex
 import shutil
 import subprocess
@@ -20,14 +21,16 @@ import time
 from typing import Any, Iterable
 
 try:
-    from . import entities, integrity, reporting, workflows
+    from . import correlation, entities, integrity, providers, reporting, workflows
 except ImportError:
+    import correlation
     import entities
     import integrity
+    import providers
     import reporting
     import workflows
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 SYSTEM_ROOT = Path("/usr/local/share/osint-forge")
 STATE_ROOT = Path.home() / ".local/state/osint-forge"
@@ -47,6 +50,12 @@ TARGET_TYPES = {
 }
 ADAPTER_PLACEHOLDERS = {"{target}", "{output_dir}", "{plugin_dir}"}
 NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+
+
+def limit_provider_output() -> None:
+    """Bound each file a provider subprocess can create on supported hosts."""
+    limit = 16 * 1024 * 1024
+    resource.setrlimit(resource.RLIMIT_FSIZE, (limit, limit))
 
 
 def forge_root() -> Path:
@@ -123,6 +132,23 @@ def write_private_text(path: Path, content: str) -> None:
     )
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        temporary.replace(path)
+        path.chmod(0o600)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def write_private_bytes(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.parent.chmod(0o700)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    descriptor = os.open(
+        temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+    )
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
             handle.write(content)
         temporary.replace(path)
         path.chmod(0o600)
@@ -1094,7 +1120,7 @@ def cmd_case_create(args: argparse.Namespace) -> int:
     if path.exists():
         raise SystemExit(f"Case already exists: {args.case}")
     path.mkdir(mode=0o700)
-    for directory in ("runs", "notes", "findings"):
+    for directory in ("runs", "notes", "findings", "observations"):
         (path / directory).mkdir(mode=0o700)
     timestamp = now()
     metadata = {
@@ -1596,7 +1622,260 @@ def cmd_case_entities(args: argparse.Namespace) -> int:
 
 
 def build_case_report(path: Path, metadata: dict[str, Any]) -> dict[str, Any]:
-    return reporting.build_report(path, metadata, catalog(), __version__)
+    graph = build_case_intelligence(path, metadata)
+    return reporting.build_report(
+        path, metadata, catalog(), __version__,
+        intelligence=graph if graph["observations"] else None,
+    )
+
+
+def _provider_payloads(path: Path) -> list[dict[str, Any]]:
+    root = path / "observations"
+    if root.is_symlink():
+        raise SystemExit("Refusing symbolic-link provider observation directory.")
+    payloads = []
+    for payload_path in sorted(root.glob("*/provider.json")):
+        try:
+            relative = payload_path.relative_to(path).as_posix()
+            payloads.append(correlation.load_provider_payload(path, relative))
+        except correlation.CorrelationError as exc:
+            raise SystemExit(str(exc)) from exc
+    return payloads
+
+
+def build_case_intelligence(
+    path: Path, metadata: dict[str, Any]
+) -> dict[str, Any]:
+    return correlation.build_graph(
+        _provider_payloads(path), canonical_entity_value, case_id=metadata["id"]
+    )
+
+
+def _bounded_regular_input(path: Path, root: Path, context: str) -> Path:
+    if path.is_symlink():
+        raise SystemExit(f"Refusing symbolic-link {context}: {path}")
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as exc:
+        raise SystemExit(f"Cannot read {context}: {exc}") from exc
+    if not resolved.is_relative_to(root) or not resolved.is_file():
+        raise SystemExit(f"{context} must be a regular file beside the provider payload.")
+    if resolved.stat().st_size > reporting.MAX_NORMALIZER_OUTPUT:
+        raise SystemExit(f"{context} exceeds the supported size limit.")
+    return resolved
+
+
+def cmd_case_observe(args: argparse.Namespace) -> int:
+    """Import normalized provider evidence without fetching any URL."""
+    path, metadata = load_case(args.case)
+    supplied = args.input.expanduser()
+    if supplied.is_symlink():
+        raise SystemExit(f"Refusing symbolic-link provider payload: {supplied}")
+    try:
+        input_path = supplied.resolve(strict=True)
+        if not input_path.is_file() or input_path.stat().st_size > reporting.MAX_NORMALIZER_OUTPUT:
+            raise OSError("payload is not a bounded regular file")
+        raw_payload = json.loads(input_path.read_text(encoding="utf-8"))
+        payload = correlation.validate_provider_payload(raw_payload)
+    except (OSError, UnicodeError, json.JSONDecodeError, correlation.CorrelationError) as exc:
+        raise SystemExit(f"Invalid provider payload: {exc}") from exc
+    if payload["provider"] != args.provider:
+        raise SystemExit("Provider argument does not match the payload provider.")
+    query = payload["query"]
+    query_canonical = canonical_entity_value(query["type"], query["value"])
+    if not any(
+        target["type"] == query["type"]
+        and canonical_entity_value(target["type"], target["value"]) == query_canonical
+        for target in metadata["targets"]
+    ):
+        raise SystemExit("Provider query is outside the operator-supplied case targets.")
+    source_root = input_path.parent.resolve()
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()[:24]
+    relative_root = Path("observations") / f"provider-{digest}"
+    destination = path / relative_root
+    if destination.exists() or destination.is_symlink():
+        raise SystemExit("This provider observation is already present in the case.")
+    destination.mkdir(parents=True, mode=0o700)
+    (destination / "raw").mkdir(mode=0o700)
+    try:
+        total_source_bytes = 0
+        for index, result in enumerate(payload["results"]):
+            relative_source = Path(result["source_file"])
+            if relative_source.is_absolute() or ".." in relative_source.parts:
+                raise SystemExit("Provider source_file must stay beside the payload.")
+            source = _bounded_regular_input(
+                source_root / relative_source, source_root, "provider source evidence"
+            )
+            fingerprint = result["source_identity"].get("content_fingerprint")
+            source_bytes = source.read_bytes()
+            if fingerprint and hashlib.sha256(source_bytes).hexdigest() != fingerprint:
+                raise SystemExit(
+                    "Provider content_fingerprint does not match its source evidence."
+                )
+            total_source_bytes += source.stat().st_size
+            if total_source_bytes > 64 * 1024 * 1024:
+                raise SystemExit("Provider source evidence exceeds the aggregate size limit.")
+            stored = relative_root / "raw" / f"{index:05d}-{source.name}"
+            write_private_bytes(path / stored, source_bytes)
+            result["source_file"] = stored.as_posix()
+        write_private_json(destination / "provider.json", payload)
+    except BaseException:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise
+    append_case_activity(
+        path, "provider_observation_imported", provider=args.provider,
+        query_type=query["type"], observation_set=digest,
+        result_count=len(payload["results"]),
+    )
+    print(f"Provider evidence: {destination / 'provider.json'}")
+    print(f"Imported {len(payload['results'])} normalized result(s); no URLs fetched.")
+    return 0
+
+
+def cmd_case_intelligence(args: argparse.Namespace) -> int:
+    path, metadata = load_case(args.case)
+    graph = build_case_intelligence(path, metadata)
+    if args.output:
+        output = safe_report_output(path, args.output)
+        if output.exists() and not args.force:
+            raise SystemExit(f"Intelligence output already exists: {output}; use --force to replace it.")
+        write_private_json(output, graph)
+        print(f"Intelligence graph: {output}")
+    if args.json or not args.output:
+        print(json.dumps(graph, indent=2, sort_keys=True))
+    append_case_activity(
+        path, "intelligence_projected", observations=len(graph["observations"]),
+        relationships=len(graph["relationships"]),
+        contradictions=len(graph["contradictions"]),
+    )
+    return 0
+
+
+def cmd_case_search(args: argparse.Namespace) -> int:
+    """Execute a versioned provider adapter against authorized case seeds."""
+    path, metadata = load_case(args.case)
+    supplied_adapter = args.adapter.expanduser()
+    if supplied_adapter.is_symlink():
+        raise SystemExit(f"Refusing symbolic-link provider adapter: {supplied_adapter}")
+    try:
+        adapter_path = supplied_adapter.resolve(strict=True)
+        adapter = providers.load_adapter(adapter_path)
+    except (OSError, providers.ProviderError) as exc:
+        raise SystemExit(str(exc)) from exc
+    targets = [
+        target for target in metadata["targets"]
+        if target["type"] in adapter["accepts"]
+        and (not args.target or target["id"] == args.target)
+    ]
+    if args.target and not any(target["id"] == args.target for target in metadata["targets"]):
+        raise SystemExit(f"Unknown case target: {args.target}")
+    if not targets:
+        raise SystemExit("Provider adapter accepts none of the selected case targets.")
+    failures = 0
+    for target in targets:
+        began = now()
+        with tempfile.TemporaryDirectory(prefix="provider-search-") as temporary:
+            output_dir = Path(temporary)
+            output_dir.chmod(0o700)
+            command = providers.resolve_command(
+                adapter, target["type"], target["value"], output_dir
+            )
+            stdout_path = output_dir / "provider-stdout.log"
+            stderr_path = output_dir / "provider-stderr.log"
+            try:
+                with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
+                    completed = subprocess.run(
+                        command,
+                        cwd=adapter_path.parent,
+                        env={
+                            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                            "HOME": str(output_dir),
+                            "LANG": os.environ.get("LANG", "C.UTF-8"),
+                            "PYTHONIOENCODING": "utf-8",
+                            **{
+                                name: os.environ[name]
+                                for name in adapter["environment"]
+                                if name in os.environ
+                            },
+                        },
+                        stdin=subprocess.DEVNULL,
+                        stdout=stdout,
+                        stderr=stderr,
+                        timeout=adapter["timeout_seconds"],
+                        check=False,
+                        preexec_fn=limit_provider_output,
+                    )
+                exit_code = completed.returncode
+                error = None
+            except subprocess.TimeoutExpired:
+                exit_code = 124
+                error = "provider adapter timed out"
+            except OSError as exc:
+                exit_code = 127
+                error = f"provider adapter could not start: {exc}"
+            for log in (stdout_path, stderr_path):
+                if log.exists() and log.stat().st_size > reporting.MAX_NORMALIZER_OUTPUT:
+                    exit_code = 125
+                    error = "provider adapter log exceeded the size limit"
+            payload_path = output_dir / "provider.json"
+            before = set((path / "observations").glob("provider-*"))
+            if exit_code == 0 and payload_path.is_file():
+                try:
+                    cmd_case_observe(argparse.Namespace(
+                        case=args.case, provider=adapter["id"], input=payload_path
+                    ))
+                except SystemExit as exc:
+                    exit_code = 65
+                    error = str(exc)
+            elif exit_code == 0:
+                exit_code = 65
+                error = "provider adapter did not write provider.json"
+            after = set((path / "observations").glob("provider-*"))
+            created = sorted(after - before)
+            destination = created[0] if created else (
+                path / "observations" / (
+                    "search-" + hashlib.sha256(
+                        f"{adapter['id']}\0{target['id']}\0{began}".encode()
+                    ).hexdigest()[:24]
+                )
+            )
+            destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+            for log in (stdout_path, stderr_path):
+                if log.is_file():
+                    write_private_bytes(destination / log.name, log.read_bytes())
+            write_private_json(destination / "execution.json", {
+                "schema": 1,
+                "provider": adapter["id"],
+                "provider_version": adapter["provider_version"],
+                "adapter": adapter,
+                "adapter_sha256": hashlib.sha256(
+                    json.dumps(
+                        adapter, sort_keys=True, separators=(",", ":")
+                    ).encode()
+                ).hexdigest(),
+                "target_id": target["id"],
+                "command": command,
+                "started_at": began,
+                "completed_at": now(),
+                "exit_code": exit_code,
+                "error": error,
+            })
+            append_case_activity(
+                path, "provider_search_finished", provider=adapter["id"],
+                provider_version=adapter["provider_version"],
+                target_id=target["id"], exit_code=exit_code, error=error,
+            )
+            if exit_code:
+                failures += 1
+                print(
+                    f"FAILED   {adapter['id']}: {target['type']}={target['value']}: {error or f'exit {exit_code}'}",
+                    file=sys.stderr,
+                )
+            else:
+                print(f"SEARCH   {adapter['id']}: {target['type']}={target['value']}")
+    return 1 if failures else 0
 
 
 def safe_report_output(path: Path, requested: Path) -> Path:
@@ -1622,7 +1901,9 @@ def safe_report_output(path: Path, requested: Path) -> Path:
     if not output.is_relative_to(path):
         raise SystemExit("Report output must remain inside the case directory.")
     reserved_files = {path / "case.json", path / "activity.jsonl"}
-    reserved_directories = (path / "runs", path / "findings")
+    reserved_directories = (
+        path / "runs", path / "findings", path / "observations"
+    )
     if (
         output in reserved_files
         or any(output.is_relative_to(directory) for directory in reserved_directories)
@@ -1807,6 +2088,22 @@ def _full_bundle_members(path: Path, metadata: dict[str, Any]) -> dict[str, byte
     }
     members["intelligence/entities.json"] = (
         json.dumps(projection, indent=2, sort_keys=True).encode() + b"\n"
+    )
+    graph = build_case_intelligence(path, metadata)
+    for observation in graph["observations"]:
+        source_file = observation.get("source_file")
+        if source_file in artifact_digests:
+            observation["artifact"] = {
+                "path": source_file,
+                "sha256": artifact_digests[source_file],
+                "algorithm": "sha256",
+            }
+    graph["integrity_binding"] = {
+        "schema": 1,
+        "policy": "provider source paths bind to verified bundle artifacts",
+    }
+    members["intelligence/graph.json"] = (
+        json.dumps(graph, indent=2, sort_keys=True).encode() + b"\n"
     )
     manifest = {
         "schema": integrity.INTEGRITY_SCHEMA,
@@ -2124,6 +2421,34 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("case")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_case_entities)
+
+    p = cs.add_parser(
+        "observe",
+        help="import normalized search-provider evidence without network access",
+    )
+    p.add_argument("case")
+    p.add_argument("provider", help="provider identifier declared by the payload")
+    p.add_argument("input", type=Path, help="normalized provider-result JSON")
+    p.set_defaults(func=cmd_case_observe)
+
+    p = cs.add_parser(
+        "search",
+        help="execute a versioned search-provider adapter for case seeds",
+    )
+    p.add_argument("case")
+    p.add_argument("adapter", type=Path, help="provider adapter JSON contract")
+    p.add_argument("--target", help="run only the specified case target ID")
+    p.set_defaults(func=cmd_case_search)
+
+    p = cs.add_parser(
+        "intelligence",
+        help="project the deterministic correlation and confidence graph",
+    )
+    p.add_argument("case")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("-o", "--output", type=Path)
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(func=cmd_case_intelligence)
 
     p = cs.add_parser("report", help="write normalized provenance-linked reports")
     p.add_argument("case")

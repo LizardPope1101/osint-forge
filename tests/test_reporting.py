@@ -144,6 +144,12 @@ class ReportingTests(unittest.TestCase):
             second = reporting.build_report(
                 case, metadata, osint_forge.catalog(), osint_forge.__version__
             )
+            self.assertEqual(first["schema"], 2)
+            self.assertNotIn("intelligence", first)
+            self.assertTrue(reporting.render_csv(first).startswith("finding_id,category"))
+            cli_report = osint_forge.build_case_report(case, metadata)
+            self.assertEqual(cli_report["schema"], 2)
+            self.assertNotIn("intelligence", cli_report)
             self.assertEqual(reporting.render_json(first), reporting.render_json(second))
             self.assertEqual(first["summary"]["finding_count"], 6)
             self.assertEqual(first["summary"]["candidate_count"], 2)
