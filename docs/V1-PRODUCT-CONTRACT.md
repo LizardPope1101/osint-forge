@@ -12,6 +12,13 @@ This contract defines the committed v1.0 outcome. It does not claim that every
 person has a discoverable public record or that any investigation can be
 literally complete.
 
+For human operators, the canonical workflow is the complete guided interface
+opened by running `osint` with no arguments. The command examples remain the
+stable advanced interface for scripting, automation, AQAD, and experienced
+operators. Both interfaces share one application and investigation engine. The
+[Interactive UI Product Contract](INTERACTIVE-UI.md) is a required part of
+this contract and a v1.0 release gate.
+
 ## Primary operator outcome
 
 Given three high-certainty seed data points—such as a name, phone number, and
@@ -213,7 +220,7 @@ transparent uncertainty, and the ability to stop.
 | v0.7 | Verifiable evidence and portable intelligence graphs |
 | v0.8 | Search-provider discovery, normalized results, relationships, source-aware correlation, verification status, temporal status, contradictions, and scoped confidence |
 | v0.9 | Bounded recursive discovery, dynamic next-action selection, stopping conditions, hardening, benchmarks, and contract freeze |
-| v1.0 | Stable create-case → add-seeds → run-case workflow with search-first discovery, opportunistic verification, bounded recursion, and confidence/currentness-filtered reporting |
+| v1.0 | Complete guided `osint` control center and stable advanced create-case → add-seeds → run-case workflow with search-first discovery, opportunistic verification, bounded recursion, and confidence/currentness-filtered reporting |
 
 The [Roadmap to v1.0](ROADMAP.md) and release issues allocate delivery, but
 this document is the canonical product outcome.

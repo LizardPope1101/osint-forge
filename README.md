@@ -11,6 +11,12 @@ verify and enrich them when compatible tools exist; Forge correlates evidence,
 pursues viable authorized leads, and reports confidence and verification status
 separately without discarding raw evidence.
 
+For v1.0, running `osint` with no arguments opens the complete guided
+investigation interface. The existing commands remain the advanced interface
+for experienced operators, scripting, automation, and AQAD; both paths use the
+same case and investigation engine. See the
+[Interactive UI Product Contract](docs/INTERACTIVE-UI.md).
+
 Use it only for lawful research. Network scanning must be limited to systems
 you own or are explicitly authorized to assess.
 
@@ -108,6 +114,18 @@ ignored. Adapter and batch output paths reject symbolic links, including
 symbolic-link parent directories.
 
 ## Case management
+
+The v1.0 development interface begins with:
+
+```bash
+osint
+```
+
+It guides the operator through creating or opening a case, adding starting
+information, running the investigation, reviewing findings, and generating a
+report without requiring command knowledge or manual file editing.
+
+The equivalent advanced commands remain available:
 
 Create a private, resumable investigation workspace and document why the work
 is authorized:

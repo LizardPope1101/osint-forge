@@ -74,7 +74,7 @@ capabilities below are the intended stable destination.
 | v0.7 | Evidence hashing, verification, and portable entity-aware case exports |
 | v0.8 | Search-provider discovery, normalized results, entity relationships, source-aware correlation, contradictions, verification status, temporal status, and scoped confidence |
 | v0.9 | Bounded recursive lead enumeration, dynamic next-action selection, stopping conditions, benchmarks, hardening, and the v1 contract freeze |
-| v1.0 | Stable create-case → add-seeds → run-case intelligence workflow through search, correlation, opportunistic verification, controlled recursion, and transparent reporting |
+| v1.0 | Complete guided `osint` control center plus the stable advanced create-case → add-seeds → run-case intelligence workflow through search, correlation, opportunistic verification, controlled recursion, and transparent reporting |
 
 ### v0.4 — Reporting and seed entities
 
@@ -188,6 +188,15 @@ Tracking: [issue #17](https://github.com/LizardPope1101/osint-forge/issues/17)
 Tracking: [issue #16](https://github.com/LizardPope1101/osint-forge/issues/16)
 
 - Stabilize the canonical CLI: create a case, add seeds, then run the case.
+- Deliver the complete guided interface defined by
+  [the Interactive UI Product Contract](INTERACTIVE-UI.md); running `osint`
+  with no arguments must open the investigation control center.
+- Keep the advanced CLI fully available and route both interfaces through the
+  same application services and investigation engine.
+- Complete create/open/resume, heterogeneous seeding and editing, bounded-run
+  configuration, progress monitoring, ambiguity review, findings review,
+  reporting, help, settings, plugin management, pause/resume/stop, and recovery
+  as one v1.0 implementation.
 - Accept multiple heterogeneous seeds in one authorized case.
 - Demonstrate the canonical name/phone/email three-seed workflow using
   synthetic or consenting test subjects.
@@ -200,6 +209,10 @@ Tracking: [issue #16](https://github.com/LizardPope1101/osint-forge/issues/16)
   internally.
 - Complete compatibility, migration, privacy, security, clean-install, upgrade,
   archive, and live Debian release validation.
+
+The v1.0 interactive interface is one cohesive implementation and release
+gate. Internal checkpoints do not become partial `v0.9.1` through `v0.9.9` UI
+releases, and no subset is represented as satisfying the v1.0 experience.
 
 ## What v1.0 will not claim
 
