@@ -7,7 +7,9 @@ import hashlib
 import importlib.util
 import io
 from pathlib import Path
+import re
 import stat
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -21,6 +23,46 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC and SPEC.loader
 qa_harness = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(qa_harness)
+
+
+class ReleaseDocumentationTests(unittest.TestCase):
+    @unittest.skipUnless((ROOT / ".git").exists(), "source archive has no tags")
+    def test_readme_latest_stable_tag_exists(self):
+        tags = subprocess.run(
+            ["git", "-C", str(ROOT), "tag", "--list"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if tags.returncode or not tags.stdout.strip():
+            self.skipTest("checkout has no local tags")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        match = re.search(
+            r"Clone the latest stable tag:.*?git clone --branch (v\d+\.\d+\.\d+)",
+            readme,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(match)
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "rev-parse",
+                "--verify",
+                f"refs/tags/{match.group(1)}^{{commit}}",
+            ],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"README latest stable tag is not published: {match.group(1)}",
+        )
 
 
 def arguments(root: Path, **overrides):
